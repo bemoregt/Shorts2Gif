@@ -132,11 +132,11 @@ class iOSButton(tk.Canvas):
         th = tmp.winfo_reqheight()
         tmp.destroy()
 
-        self._w = tw + 2 * padx
-        self._h = th + 2 * pady
-        self._r = min(10, self._h // 2)
+        self._bw = tw + 2 * padx
+        self._bh = th + 2 * pady
+        self._r = min(10, self._bh // 2)
 
-        super().__init__(parent, width=self._w, height=self._h,
+        super().__init__(parent, width=self._bw, height=self._bh,
                          bd=0, highlightthickness=0, cursor="arrow",
                          bg=self._bg)
         self._render()
@@ -147,7 +147,7 @@ class iOSButton(tk.Canvas):
 
     def _render(self, pressed=False):
         self.delete("all")
-        w, h = self._w, self._h
+        w, h = self._bw, self._bh
         r = self._r
         top_c, bot_c, border_c = self.PALETTES[self._color]
         text_c = "#ffffff" if self._color in ("blue", "green", "red") else IOS_TEXT
@@ -192,7 +192,7 @@ class iOSButton(tk.Canvas):
 
         # Label
         ox = 1 if pressed else 0
-        self.create_text(w // 2 + ox, h // 2 + ox + 1,
+        self.create_text(self._bw // 2 + ox, self._bh // 2 + ox + 1,
                          text=self._text, font=self._font, fill=text_c)
 
     def _draw_border(self, x1, y1, x2, y2, r, color):

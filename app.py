@@ -6,6 +6,7 @@ import os
 import re
 import tempfile
 import shutil
+import math
 
 OUTPUT_DIR = os.path.expanduser("~/Downloads")
 
@@ -79,64 +80,66 @@ def download_and_convert(url, output_dir, fps_var, scale_var, on_progress, on_do
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-W2K_BG       = "#d4d0c8"   # classic silver-gray
-W2K_DARK     = "#808080"   # shadow edge
-W2K_LIGHT    = "#ffffff"   # highlight edge
-W2K_FACE     = "#d4d0c8"   # button face
-W2K_TEXT     = "#000000"
-W2K_TITLE_BG = "#000080"   # navy title bar
-W2K_TITLE_FG = "#ffffff"
-W2K_ENTRY    = "#ffffff"
-W2K_SEL_BG   = "#000080"
-W2K_SEL_FG   = "#ffffff"
-W2K_FONT     = ("Tahoma", 8)
-W2K_FONT_B   = ("Tahoma", 8, "bold")
-W2K_FONT_SM  = ("Tahoma", 7)
+# ── iOS 6 Skeuomorphism Design System ─────────────────────────────────────────
+IOS_BG       = "#efeff4"   # grouped table view background
+IOS_CARD     = "#ffffff"   # section card
+IOS_NAV_TOP  = "#6d8db5"   # nav bar gradient top
+IOS_NAV_BOT  = "#2d527e"   # nav bar gradient bottom
+IOS_NAV_FG   = "#ffffff"
+IOS_SEP      = "#c8c7cc"   # separator / border
+IOS_TEXT     = "#1c1c1e"
+IOS_TEXT_SEC = "#8e8e93"
+
+IOS_FONT     = ("Helvetica Neue", 11)
+IOS_FONT_B   = ("Helvetica Neue", 12, "bold")
+IOS_FONT_SM  = ("Helvetica Neue", 10)
+IOS_FONT_NAV = ("Helvetica Neue", 15, "bold")
+IOS_FONT_CAP = ("Helvetica Neue", 10)
 
 
-class Win2KButton(tk.Canvas):
-    """Pixel-accurate Windows 2000 raised button drawn on a Canvas."""
-    FACE   = "#d4d0c8"
-    HI_OUT = "#ffffff"    # outer highlight  (top-left 1px)
-    HI_IN  = "#e0ddd6"    # inner highlight  (top-left 2nd px)
-    SH_IN  = "#808080"    # inner shadow     (bottom-right 2nd px)
-    SH_OUT = "#404040"    # outer shadow     (bottom-right 1px)
-    TEXT_N = "#000000"
-    TEXT_D = "#808080"    # disabled gray
-    TEXT_S = "#ffffff"    # disabled shadow
+def lerp_color(c1, c2, t):
+    """Linear interpolation between two hex color strings."""
+    t = max(0.0, min(1.0, t))
+    r = int(int(c1[1:3], 16) + (int(c2[1:3], 16) - int(c1[1:3], 16)) * t)
+    g = int(int(c1[3:5], 16) + (int(c2[3:5], 16) - int(c1[3:5], 16)) * t)
+    b = int(int(c1[5:7], 16) + (int(c2[5:7], 16) - int(c1[5:7], 16)) * t)
+    return f"#{r:02x}{g:02x}{b:02x}"
 
-    def __init__(self, parent, text="", command=None,
-                 width=None, padx=12, pady=4,
-                 font=None, default="normal", state="normal"):
-        self._font_spec = font or W2K_FONT
+
+class iOSButton(tk.Canvas):
+    """Glossy iOS 6 skeuomorphic button drawn on a Canvas."""
+    PALETTES = {
+        "blue":  ("#5eb8f8", "#1470d0", "#0d56a8"),
+        "green": ("#72d874", "#30b832", "#228020"),
+        "gray":  ("#dedee4", "#aeaeb6", "#8e8e96"),
+        "red":   ("#ff6868", "#dd2020", "#aa1010"),
+    }
+
+    def __init__(self, parent, text="", command=None, color="gray",
+                 min_width=80, padx=16, pady=8, font=None, bg=None):
         self._text = text
         self._command = command
-        self._state = state
-        self._default = default
+        self._color = color
+        self._state = "normal"
         self._pressed = False
         self._inside = False
+        self._font = font or IOS_FONT
+        self._bg = bg or IOS_BG
 
-        # Measure text dimensions using a temporary label
-        tmp = tk.Label(parent, text=text, font=self._font_spec)
+        tmp = tk.Label(parent, text=text, font=self._font)
         tmp.update_idletasks()
-        tw = tmp.winfo_reqwidth()
+        tw = max(tmp.winfo_reqwidth(), min_width - 2 * padx)
         th = tmp.winfo_reqheight()
         tmp.destroy()
 
-        if width is not None:
-            tmp2 = tk.Label(parent, text="W" * width, font=self._font_spec)
-            tmp2.update_idletasks()
-            tw = max(tw, tmp2.winfo_reqwidth())
-            tmp2.destroy()
+        self._w = tw + 2 * padx
+        self._h = th + 2 * pady
+        self._r = min(10, self._h // 2)
 
-        self._bw = tw + 2 * padx + 4   # 4 = 2px border each side
-        self._bh = th + 2 * pady + 4
-
-        super().__init__(parent,
-                         width=self._bw, height=self._bh,
-                         bd=0, highlightthickness=0, cursor="arrow")
+        super().__init__(parent, width=self._w, height=self._h,
+                         bd=0, highlightthickness=0, cursor="arrow",
+                         bg=self._bg)
         self._render()
-
         self.bind("<ButtonPress-1>",   self._on_press)
         self.bind("<ButtonRelease-1>", self._on_release)
         self.bind("<Enter>",           self._on_enter)
@@ -144,54 +147,73 @@ class Win2KButton(tk.Canvas):
 
     def _render(self, pressed=False):
         self.delete("all")
-        w, h = self._bw - 1, self._bh - 1
+        w, h = self._w, self._h
+        r = self._r
+        top_c, bot_c, border_c = self.PALETTES[self._color]
+        text_c = "#ffffff" if self._color in ("blue", "green", "red") else IOS_TEXT
 
         if pressed:
-            hi_out, hi_in = self.SH_OUT, self.SH_IN
-            sh_out, sh_in = self.HI_OUT, self.HI_IN
-        else:
-            hi_out, hi_in = self.HI_OUT, self.HI_IN
-            sh_out, sh_in = self.SH_OUT, self.SH_IN
-
-        # Button face fill
-        self.create_rectangle(2, 2, w - 1, h - 1, fill=self.FACE, outline="")
-
-        # Outer border (1px)
-        self.create_line(0, 0, w,     0,     fill=hi_out)  # top
-        self.create_line(0, 0, 0,     h,     fill=hi_out)  # left
-        self.create_line(0, h, w + 1, h,     fill=sh_out)  # bottom
-        self.create_line(w, 0, w,     h,     fill=sh_out)  # right
-
-        # Inner border (2nd px)
-        self.create_line(1, 1, w - 1,     1,     fill=hi_in)  # top
-        self.create_line(1, 1, 1,         h - 1, fill=hi_in)  # left
-        self.create_line(1, h - 1, w - 1, h - 1, fill=sh_in)  # bottom
-        self.create_line(w - 1, 1, w - 1, h - 1, fill=sh_in)  # right
-
-        # Default button: extra 1px black outer frame
-        if self._default == "active" and not pressed:
-            self.create_rectangle(0, 0, w, h, outline="#000000", fill="")
-
-        # Text (shifts 1px right+down when pressed — classic Win behavior)
-        ox = 1 if pressed else 0
-        cx = self._bw // 2 + ox
-        cy = self._bh // 2 + ox
+            top_c = lerp_color(top_c, "#000000", 0.18)
+            bot_c = lerp_color(bot_c, "#000000", 0.18)
 
         if self._state == "disabled":
-            # Embossed disabled text: white shadow offset +1, then gray on top
-            self.create_text(cx + 1, cy + 1, text=self._text,
-                             font=self._font_spec, fill=self.TEXT_S)
-            self.create_text(cx, cy, text=self._text,
-                             font=self._font_spec, fill=self.TEXT_D)
-        else:
-            self.create_text(cx, cy, text=self._text,
-                             font=self._font_spec, fill=self.TEXT_N)
+            top_c = lerp_color(top_c, "#cccccc", 0.55)
+            bot_c = lerp_color(bot_c, "#cccccc", 0.55)
+            text_c = "#aaaaaa"
+
+        # Two-band iOS gloss gradient: top half is glossy, bottom half is deep
+        split = int(h * 0.50)
+        gloss_top = lerp_color(top_c, "#ffffff", 0.46)
+        gloss_bot = lerp_color(top_c, "#ffffff", 0.12)
+
+        for y in range(h):
+            # Clip x bounds to rounded rectangle shape
+            if y < r:
+                dx = int(r - math.sqrt(max(0.0, r * r - (r - y - 0.5) ** 2)))
+            elif y > h - r - 1:
+                ri = h - 1 - y
+                dx = int(r - math.sqrt(max(0.0, r * r - (r - ri - 0.5) ** 2)))
+            else:
+                dx = 0
+
+            if y <= split:
+                t = y / max(split, 1)
+                color = lerp_color(gloss_top, gloss_bot, t)
+            else:
+                t = (y - split) / max(h - split - 1, 1)
+                color = lerp_color(top_c, bot_c, t)
+
+            x1, x2 = dx, w - dx
+            if x1 < x2:
+                self.create_line(x1, y, x2, y, fill=color)
+
+        # Rounded border
+        self._draw_border(0, 0, w - 1, h - 1, r, border_c)
+
+        # Label
+        ox = 1 if pressed else 0
+        self.create_text(w // 2 + ox, h // 2 + ox + 1,
+                         text=self._text, font=self._font, fill=text_c)
+
+    def _draw_border(self, x1, y1, x2, y2, r, color):
+        self.create_arc(x1,      y1,      x1+2*r, y1+2*r, start=90,  extent=90, style="arc", outline=color)
+        self.create_arc(x2-2*r,  y1,      x2,     y1+2*r, start=0,   extent=90, style="arc", outline=color)
+        self.create_arc(x1,      y2-2*r,  x1+2*r, y2,     start=180, extent=90, style="arc", outline=color)
+        self.create_arc(x2-2*r,  y2-2*r,  x2,     y2,     start=270, extent=90, style="arc", outline=color)
+        self.create_line(x1+r, y1, x2-r, y1, fill=color)
+        self.create_line(x1+r, y2, x2-r, y2, fill=color)
+        self.create_line(x1, y1+r, x1, y2-r, fill=color)
+        self.create_line(x2, y1+r, x2, y2-r, fill=color)
 
     def config(self, **kw):
-        for key in ("state", "font", "default", "text"):
-            if key in kw:
-                setattr(self, f"_{'font_spec' if key == 'font' else key}", kw[key])
-        if kw:
+        changed = False
+        if "state" in kw:
+            self._state = kw["state"]
+            changed = True
+        if "text" in kw:
+            self._text = kw["text"]
+            changed = True
+        if changed:
             self._render(pressed=self._pressed)
 
     def configure(self, **kw):
@@ -222,172 +244,188 @@ class Win2KButton(tk.Canvas):
             self._render(pressed=False)
 
 
-def w2k_button(parent, text, command, width=None, font=None, default="normal", padx=12, pady=4):
-    return Win2KButton(parent, text=text, command=command,
-                       width=width, font=font, default=default,
-                       padx=padx, pady=pady)
-
-
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("YouTube Shorts → GIF Converter")
+        self.title("YouTube → GIF")
         self.resizable(False, False)
-        self.configure(bg=W2K_BG)
-        self._apply_w2k_style()
+        self.configure(bg=IOS_BG)
+        self._apply_style()
         self._build_ui()
         self._check_clipboard_on_focus()
 
-    def _apply_w2k_style(self):
+    def _apply_style(self):
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("TProgressbar",
-                        troughcolor="#c0c0c0",
-                        background=W2K_TITLE_BG,
-                        borderwidth=2,
-                        relief="sunken")
+        style.configure("iOS.TProgressbar",
+                        troughcolor="#dde0e8",
+                        background="#4a90d9",
+                        borderwidth=0,
+                        thickness=6)
         style.configure("TCombobox",
-                        fieldbackground=W2K_ENTRY,
-                        background=W2K_FACE,
-                        foreground=W2K_TEXT,
-                        selectbackground=W2K_SEL_BG,
-                        selectforeground=W2K_SEL_FG,
-                        arrowcolor=W2K_TEXT)
-        self.option_add("*TCombobox*Listbox.background", W2K_ENTRY)
-        self.option_add("*TCombobox*Listbox.foreground", W2K_TEXT)
-        self.option_add("*TCombobox*Listbox.selectBackground", W2K_SEL_BG)
-        self.option_add("*TCombobox*Listbox.selectForeground", W2K_SEL_FG)
-        self.option_add("*TCombobox*Listbox.font", W2K_FONT)
+                        fieldbackground=IOS_CARD,
+                        background=IOS_CARD,
+                        foreground=IOS_TEXT,
+                        selectbackground="#007aff",
+                        selectforeground="#ffffff",
+                        borderwidth=1)
+        self.option_add("*TCombobox*Listbox.background",       IOS_CARD)
+        self.option_add("*TCombobox*Listbox.foreground",       IOS_TEXT)
+        self.option_add("*TCombobox*Listbox.selectBackground", "#007aff")
+        self.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
+        self.option_add("*TCombobox*Listbox.font",             IOS_FONT)
 
+    # ── Navigation bar ─────────────────────────────────────────────────────────
+    def _build_nav(self):
+        nav = tk.Canvas(self, height=44, bd=0, highlightthickness=0,
+                        bg=IOS_NAV_BOT)
+        nav.pack(fill="x")
+
+        def draw(event=None):
+            nav.delete("all")
+            w = nav.winfo_width() or 520
+            for y in range(44):
+                nav.create_line(0, y, w, y,
+                                fill=lerp_color(IOS_NAV_TOP, IOS_NAV_BOT, y / 43))
+            nav.create_line(0, 0, w, 0,
+                            fill=lerp_color(IOS_NAV_TOP, "#ffffff", 0.4))  # top sheen
+            nav.create_line(0, 43, w, 43, fill="#1a3560")                  # bottom shadow
+            nav.create_text(w // 2, 22, text="YouTube  →  GIF",
+                            font=IOS_FONT_NAV, fill=IOS_NAV_FG)
+
+        nav.bind("<Configure>", draw)
+        self.after(10, draw)
+
+    # ── Layout helpers ─────────────────────────────────────────────────────────
+    def _section_label(self, parent, text):
+        tk.Label(parent, text=text.upper(),
+                 font=IOS_FONT_CAP, bg=IOS_BG, fg=IOS_TEXT_SEC,
+                 anchor="w").pack(fill="x", padx=16, pady=(8, 2))
+
+    def _card(self, parent):
+        return tk.Frame(parent, bg=IOS_CARD,
+                        highlightbackground=IOS_SEP,
+                        highlightthickness=1)
+
+    def _row_sep(self, card):
+        tk.Frame(card, bg=IOS_SEP, height=1).pack(fill="x", padx=0)
+
+    # ── UI build ───────────────────────────────────────────────────────────────
     def _build_ui(self):
-        # ── Title bar strip ────────────────────────────────────────────
-        title_bar = tk.Frame(self, bg=W2K_TITLE_BG, height=22)
-        title_bar.pack(fill="x")
-        title_bar.pack_propagate(False)
+        self._build_nav()
 
-        tk.Label(title_bar,
-                 text="  YouTube Shorts → GIF Converter",
-                 font=W2K_FONT_B, bg=W2K_TITLE_BG, fg=W2K_TITLE_FG,
-                 anchor="w").pack(side="left", fill="y")
+        body = tk.Frame(self, bg=IOS_BG)
+        body.pack(fill="both", pady=6)
 
-        for sym, cmd in [("_", self.iconify), ("X", self.destroy)]:
-            Win2KButton(title_bar, text=sym, command=cmd,
-                        font=W2K_FONT_B, padx=6, pady=1
-                        ).pack(side="right", padx=1, pady=1)
+        # ── URL card ───────────────────────────────────────────────────
+        self._section_label(body, "YouTube URL")
+        url_card = self._card(body)
+        url_card.pack(fill="x", padx=12)
 
-        # ── Main body ──────────────────────────────────────────────────
-        body = tk.Frame(self, bg=W2K_BG, padx=10, pady=8)
-        body.pack(fill="both")
-
-        # URL row
-        url_lf = tk.LabelFrame(body, text="YouTube URL",
-                                font=W2K_FONT, bg=W2K_BG, fg=W2K_TEXT,
-                                relief="groove", bd=2)
-        url_lf.pack(fill="x", pady=(0, 6))
-
-        url_inner = tk.Frame(url_lf, bg=W2K_BG)
-        url_inner.pack(fill="x", padx=6, pady=4)
+        url_row = tk.Frame(url_card, bg=IOS_CARD)
+        url_row.pack(fill="x", padx=10, pady=9)
 
         self.url_var = tk.StringVar()
-        self.url_entry = tk.Entry(url_inner, textvariable=self.url_var,
-                                  font=W2K_FONT, bg=W2K_ENTRY, fg=W2K_TEXT,
-                                  insertbackground=W2K_TEXT,
-                                  relief="sunken", bd=2, width=52)
+        self.url_entry = tk.Entry(url_row,
+                                  textvariable=self.url_var,
+                                  font=IOS_FONT, bg=IOS_CARD, fg=IOS_TEXT,
+                                  insertbackground=IOS_TEXT,
+                                  relief="flat", bd=0, width=44)
         self.url_entry.pack(side="left", fill="x", expand=True)
+        tk.Frame(url_row, bg=IOS_SEP, width=1).pack(side="left", fill="y", padx=8)
+        iOSButton(url_row, "붙여넣기", self._paste_url,
+                  color="blue", padx=12, pady=4,
+                  font=IOS_FONT_SM, bg=IOS_CARD).pack(side="left")
 
-        paste_btn = w2k_button(url_inner, "붙여넣기(&P)", self._paste_url, width=10)
-        paste_btn.pack(side="left", padx=(4, 0))
+        # ── Options card ───────────────────────────────────────────────
+        self._section_label(body, "변환 옵션")
+        opt_card = self._card(body)
+        opt_card.pack(fill="x", padx=12)
 
-        # Options group
-        opt_lf = tk.LabelFrame(body, text="변환 옵션",
-                                font=W2K_FONT, bg=W2K_BG, fg=W2K_TEXT,
-                                relief="groove", bd=2)
-        opt_lf.pack(fill="x", pady=(0, 6))
-
-        opt_inner = tk.Frame(opt_lf, bg=W2K_BG)
-        opt_inner.pack(padx=8, pady=6, fill="x")
-
-        # FPS
-        tk.Label(opt_inner, text="FPS:", font=W2K_FONT,
-                 bg=W2K_BG, fg=W2K_TEXT).grid(row=0, column=0, sticky="w")
+        # FPS row
+        fps_row = tk.Frame(opt_card, bg=IOS_CARD)
+        fps_row.pack(fill="x", padx=14, pady=9)
+        tk.Label(fps_row, text="FPS", font=IOS_FONT,
+                 bg=IOS_CARD, fg=IOS_TEXT, width=10, anchor="w").pack(side="left")
         self.fps_var = tk.IntVar(value=15)
-        fps_spin = tk.Spinbox(opt_inner, from_=5, to=30, increment=5,
-                               textvariable=self.fps_var,
-                               width=5, font=W2K_FONT,
-                               bg=W2K_ENTRY, fg=W2K_TEXT,
-                               relief="sunken", bd=2,
-                               buttonbackground=W2K_FACE)
-        fps_spin.grid(row=0, column=1, padx=(4, 16), sticky="w")
+        tk.Spinbox(fps_row, from_=5, to=30, increment=5,
+                   textvariable=self.fps_var,
+                   width=5, font=IOS_FONT,
+                   bg=IOS_CARD, fg=IOS_TEXT,
+                   relief="solid", bd=1,
+                   buttonbackground=IOS_BG).pack(side="left")
 
-        # Scale
-        tk.Label(opt_inner, text="가로 크기(px):", font=W2K_FONT,
-                 bg=W2K_BG, fg=W2K_TEXT).grid(row=0, column=2, sticky="w")
+        self._row_sep(opt_card)
+
+        # Scale row
+        scale_row = tk.Frame(opt_card, bg=IOS_CARD)
+        scale_row.pack(fill="x", padx=14, pady=9)
+        tk.Label(scale_row, text="가로 크기", font=IOS_FONT,
+                 bg=IOS_CARD, fg=IOS_TEXT, width=10, anchor="w").pack(side="left")
         self.scale_var = tk.IntVar(value=480)
-        scale_combo = ttk.Combobox(opt_inner, textvariable=self.scale_var,
-                                    values=[240, 320, 480, 640, 720],
-                                    width=6, state="readonly", font=W2K_FONT)
-        scale_combo.grid(row=0, column=3, padx=(4, 16), sticky="w")
+        ttk.Combobox(scale_row, textvariable=self.scale_var,
+                     values=[240, 320, 480, 640, 720],
+                     width=8, state="readonly",
+                     font=IOS_FONT).pack(side="left")
 
-        # Output dir
-        tk.Label(opt_inner, text="저장 위치:", font=W2K_FONT,
-                 bg=W2K_BG, fg=W2K_TEXT).grid(row=0, column=4, sticky="w")
+        self._row_sep(opt_card)
+
+        # Directory row
+        dir_row = tk.Frame(opt_card, bg=IOS_CARD)
+        dir_row.pack(fill="x", padx=14, pady=9)
+        tk.Label(dir_row, text="저장 위치", font=IOS_FONT,
+                 bg=IOS_CARD, fg=IOS_TEXT, width=10, anchor="w").pack(side="left")
         self.outdir_var = tk.StringVar(value=OUTPUT_DIR)
-        dir_entry = tk.Entry(opt_inner, textvariable=self.outdir_var,
-                              font=W2K_FONT_SM, bg=W2K_ENTRY, fg=W2K_TEXT,
-                              relief="sunken", bd=2, width=22,
-                              state="readonly")
-        dir_entry.grid(row=0, column=5, padx=(4, 4), sticky="w")
-        w2k_button(opt_inner, "찾아보기...", self._choose_dir, width=8).grid(row=0, column=6)
+        tk.Entry(dir_row, textvariable=self.outdir_var,
+                 font=IOS_FONT_SM, bg=IOS_CARD, fg=IOS_TEXT_SEC,
+                 relief="flat", bd=0, width=26,
+                 state="readonly").pack(side="left", fill="x", expand=True)
+        iOSButton(dir_row, "찾기", self._choose_dir,
+                  color="gray", padx=12, pady=4,
+                  font=IOS_FONT_SM, bg=IOS_CARD).pack(side="right")
 
-        # ── Separator ──────────────────────────────────────────────────
-        sep_outer = tk.Frame(body, bg=W2K_DARK, height=2)
-        sep_outer.pack(fill="x", pady=4)
-        tk.Frame(sep_outer, bg=W2K_LIGHT, height=1).pack(fill="x", pady=(1, 0))
+        # ── Convert button ─────────────────────────────────────────────
+        btn_outer = tk.Frame(body, bg=IOS_BG)
+        btn_outer.pack(fill="x", padx=12, pady=(10, 4))
+        self.convert_btn = iOSButton(btn_outer, "GIF 변환 시작", self._start_conversion,
+                                      color="green", min_width=440,
+                                      padx=20, pady=12,
+                                      font=IOS_FONT_B, bg=IOS_BG)
+        self.convert_btn.pack()
 
-        # ── Convert button row ─────────────────────────────────────────
-        btn_row = tk.Frame(body, bg=W2K_BG)
-        btn_row.pack(pady=4)
-
-        self.convert_btn = w2k_button(btn_row, "GIF 변환 시작(&C)", self._start_conversion,
-                                       width=20, font=W2K_FONT_B, default="active", pady=6)
-        self.convert_btn.pack(side="left", padx=4)
-
-        w2k_button(btn_row, "닫기(&X)", self.destroy, width=10, pady=6).pack(side="left", padx=4)
-
-        # ── Status / progress group ────────────────────────────────────
-        status_lf = tk.LabelFrame(body, text="상태",
-                                   font=W2K_FONT, bg=W2K_BG, fg=W2K_TEXT,
-                                   relief="groove", bd=2)
-        status_lf.pack(fill="x", pady=(6, 0))
-
-        status_inner = tk.Frame(status_lf, bg=W2K_BG)
-        status_inner.pack(fill="x", padx=6, pady=4)
+        # ── Status card ────────────────────────────────────────────────
+        self._section_label(body, "상태")
+        status_card = self._card(body)
+        status_card.pack(fill="x", padx=12)
+        status_inner = tk.Frame(status_card, bg=IOS_CARD)
+        status_inner.pack(fill="x", padx=12, pady=9)
 
         self.progress_lbl = tk.Label(status_inner, text="대기 중...",
-                                      font=W2K_FONT, bg=W2K_BG, fg=W2K_TEXT,
+                                      font=IOS_FONT, bg=IOS_CARD, fg=IOS_TEXT_SEC,
                                       anchor="w")
         self.progress_lbl.pack(fill="x")
+        self.progress = ttk.Progressbar(status_inner, mode="indeterminate",
+                                         length=450, style="iOS.TProgressbar")
+        self.progress.pack(fill="x", pady=(6, 0))
 
-        self.progress = ttk.Progressbar(status_inner, mode="indeterminate", length=500)
-        self.progress.pack(fill="x", pady=(2, 0))
+        # ── Result area ────────────────────────────────────────────────
+        self.result_frame = tk.Frame(body, bg=IOS_BG)
+        self.result_frame.pack(fill="x", padx=12, pady=(6, 8))
 
-        # Result row
-        self.result_frame = tk.Frame(body, bg=W2K_BG)
-        self.result_frame.pack(fill="x", pady=(4, 6))
-
-        result_box = tk.Frame(self.result_frame, bg=W2K_ENTRY,
-                               relief="sunken", bd=2)
-        result_box.pack(side="left", fill="x", expand=True)
-        self.result_lbl = tk.Label(result_box, text="",
-                                    font=W2K_FONT_SM, bg=W2K_ENTRY, fg=W2K_TEXT,
-                                    wraplength=400, justify="left", anchor="w",
-                                    padx=4, pady=2)
+        result_card = self._card(self.result_frame)
+        result_card.pack(side="left", fill="x", expand=True)
+        self.result_lbl = tk.Label(result_card, text="",
+                                    font=IOS_FONT_SM, bg=IOS_CARD, fg=IOS_TEXT,
+                                    wraplength=360, justify="left", anchor="w",
+                                    padx=10, pady=6)
         self.result_lbl.pack(fill="x")
 
-        self.open_btn = w2k_button(self.result_frame, "폴더 열기", self._open_in_finder, width=10)
-
+        self.open_btn = iOSButton(self.result_frame, "Finder 열기", self._open_in_finder,
+                                   color="blue", padx=12, pady=8,
+                                   font=IOS_FONT_SM, bg=IOS_BG)
         self._last_gif = None
 
+    # ── Event handlers ─────────────────────────────────────────────────────────
     def _check_clipboard_on_focus(self):
         self.bind("<FocusIn>", self._on_focus)
 
@@ -401,8 +439,7 @@ class App(tk.Tk):
 
     def _paste_url(self):
         try:
-            clip = self.clipboard_get()
-            self.url_var.set(clip)
+            self.url_var.set(self.clipboard_get())
         except Exception:
             pass
 
@@ -441,12 +478,13 @@ class App(tk.Tk):
         ).start()
 
     def _on_progress(self, msg):
-        self.after(0, lambda: self.progress_lbl.config(text=msg))
+        self.after(0, lambda: self.progress_lbl.config(text=msg, fg=IOS_TEXT_SEC))
 
     def _on_done(self, gif_path):
         self._last_gif = gif_path
         size_mb = os.path.getsize(gif_path) / 1024 / 1024
-        self.after(0, lambda: self._finish(f"저장 완료: {gif_path}\n({size_mb:.1f} MB)", success=True))
+        self.after(0, lambda: self._finish(
+            f"저장 완료: {gif_path}\n({size_mb:.1f} MB)", success=True))
 
     def _on_error(self, msg):
         self.after(0, lambda: self._finish(msg, success=False))
@@ -454,11 +492,14 @@ class App(tk.Tk):
     def _finish(self, msg, success):
         self.progress.stop()
         self.convert_btn.config(state="normal")
-        color = "#000080" if success else "#800000"
-        self.progress_lbl.config(text="완료!" if success else "오류 발생")
-        self.result_lbl.config(text=msg, fg=color)
+        self.progress_lbl.config(
+            text="완료!" if success else "오류 발생",
+            fg="#1a72d4" if success else "#dd2020")
+        self.result_lbl.config(
+            text=msg,
+            fg=IOS_TEXT if success else "#dd2020")
         if success and self._last_gif:
-            self.open_btn.pack(side="right", padx=(4, 0))
+            self.open_btn.pack(side="right", padx=(8, 0))
 
     def _open_in_finder(self):
         if self._last_gif and os.path.exists(self._last_gif):

@@ -6,7 +6,6 @@ import os
 import re
 import tempfile
 import shutil
-import math
 
 OUTPUT_DIR = os.path.expanduser("~/Downloads")
 
@@ -80,25 +79,27 @@ def download_and_convert(url, output_dir, fps_var, scale_var, on_progress, on_do
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-# ── iOS 6 Skeuomorphism Design System ─────────────────────────────────────────
-IOS_BG       = "#efeff4"   # grouped table view background
-IOS_CARD     = "#ffffff"   # section card
-IOS_NAV_TOP  = "#6d8db5"   # nav bar gradient top
-IOS_NAV_BOT  = "#2d527e"   # nav bar gradient bottom
-IOS_NAV_FG   = "#ffffff"
-IOS_SEP      = "#c8c7cc"   # separator / border
-IOS_TEXT     = "#1c1c1e"
-IOS_TEXT_SEC = "#8e8e93"
+# ── Neumorphism Design System ──────────────────────────────────────────────────
+NEU_BG      = "#e0e5ec"   # single unified background
+NEU_LIGHT   = "#ffffff"   # highlight shadow color
+NEU_DARK    = "#a3b1c6"   # depth shadow color
+NEU_TEXT    = "#31456a"   # primary text
+NEU_TEXT_S  = "#8899aa"   # secondary / muted text
+NEU_ACCENT  = "#5b84b1"   # accent blue
+NEU_GREEN   = "#4e9a6a"   # success green
+NEU_RED     = "#aa4444"   # error red
 
-IOS_FONT     = ("Helvetica Neue", 11)
-IOS_FONT_B   = ("Helvetica Neue", 12, "bold")
-IOS_FONT_SM  = ("Helvetica Neue", 10)
-IOS_FONT_NAV = ("Helvetica Neue", 15, "bold")
-IOS_FONT_CAP = ("Helvetica Neue", 10)
+NEU_FONT    = ("Helvetica Neue", 12)
+NEU_FONT_B  = ("Helvetica Neue", 13, "bold")
+NEU_FONT_SM = ("Helvetica Neue", 10)
+NEU_FONT_H  = ("Helvetica Neue", 20, "bold")
+NEU_FONT_CAP = ("Helvetica Neue", 9)
+
+SD = 5   # shadow depth (offset pixels)
+SR = 12  # default corner radius
 
 
 def lerp_color(c1, c2, t):
-    """Linear interpolation between two hex color strings."""
     t = max(0.0, min(1.0, t))
     r = int(int(c1[1:3], 16) + (int(c2[1:3], 16) - int(c1[1:3], 16)) * t)
     g = int(int(c1[3:5], 16) + (int(c2[3:5], 16) - int(c1[3:5], 16)) * t)
@@ -106,25 +107,59 @@ def lerp_color(c1, c2, t):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-class iOSButton(tk.Canvas):
-    """Glossy iOS 6 skeuomorphic button drawn on a Canvas."""
-    PALETTES = {
-        "blue":  ("#5eb8f8", "#1470d0", "#0d56a8"),
-        "green": ("#72d874", "#30b832", "#228020"),
-        "gray":  ("#dedee4", "#aeaeb6", "#8e8e96"),
-        "red":   ("#ff6868", "#dd2020", "#aa1010"),
-    }
+def fill_rrect(canvas, x1, y1, x2, y2, r, color):
+    """Fill a rounded rectangle on a Canvas."""
+    r = max(0, min(r, (x2 - x1) // 2, (y2 - y1) // 2))
+    canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=color, outline="")
+    canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=color, outline="")
+    if r > 0:
+        for ox, oy in ((x1, y1), (x2 - 2*r, y1), (x1, y2 - 2*r), (x2 - 2*r, y2 - 2*r)):
+            canvas.create_oval(ox, oy, ox + 2*r, oy + 2*r, fill=color, outline="")
 
-    def __init__(self, parent, text="", command=None, color="gray",
-                 min_width=80, padx=16, pady=8, font=None, bg=None):
-        self._text = text
+
+def draw_raised(canvas, x1, y1, x2, y2, r=SR, steps=SD):
+    """Draw neumorphic raised (extruded) shadow layers, then fill face."""
+    for i in range(steps, 0, -1):
+        t = i / steps
+        light = lerp_color(NEU_BG, NEU_LIGHT, t * 0.85)
+        dark  = lerp_color(NEU_BG, NEU_DARK,  t * 0.65)
+        fill_rrect(canvas, x1 - i, y1 - i, x2 - i, y2 - i, r, light)
+        fill_rrect(canvas, x1 + i, y1 + i, x2 + i, y2 + i, r, dark)
+    fill_rrect(canvas, x1, y1, x2, y2, r, NEU_BG)
+
+
+def draw_inset(canvas, x1, y1, x2, y2, r=SR, steps=SD):
+    """Draw neumorphic inset (pressed) shadow layers."""
+    fill_rrect(canvas, x1, y1, x2, y2, r, NEU_BG)
+    for i in range(1, steps + 1):
+        t = i / steps
+        dark  = lerp_color(NEU_BG, NEU_DARK,  t * 0.45)
+        light = lerp_color(NEU_BG, NEU_LIGHT, t * 0.70)
+        x1c, y1c, x2c, y2c = x1 + r//2, y1 + r//2, x2 - r//2, y2 - r//2
+        if y1c + i <= y2c:
+            canvas.create_line(x1c, y1c + i, x2c, y1c + i, fill=dark)
+        if x1c + i <= x2c:
+            canvas.create_line(x1c + i, y1c, x1c + i, y2c, fill=dark)
+        if y2c - i >= y1c:
+            canvas.create_line(x1c, y2c - i, x2c, y2c - i, fill=light)
+        if x2c - i >= x1c:
+            canvas.create_line(x2c - i, y1c, x2c - i, y2c, fill=light)
+
+
+class NeuButton(tk.Canvas):
+    """Neumorphic button: raised at rest, inset when pressed."""
+
+    def __init__(self, parent, text="", command=None,
+                 min_width=80, padx=20, pady=10,
+                 font=None, color=None, bg=None):
+        self._text    = text
         self._command = command
-        self._color = color
-        self._state = "normal"
+        self._state   = "normal"
+        self._color   = color or NEU_TEXT   # text/icon accent color
         self._pressed = False
-        self._inside = False
-        self._font = font or IOS_FONT
-        self._bg = bg or IOS_BG
+        self._inside  = False
+        self._font    = font or NEU_FONT
+        self._cbg     = bg or NEU_BG
 
         tmp = tk.Label(parent, text=text, font=self._font)
         tmp.update_idletasks()
@@ -134,11 +169,14 @@ class iOSButton(tk.Canvas):
 
         self._bw = tw + 2 * padx
         self._bh = th + 2 * pady
-        self._r = min(10, self._bh // 2)
 
-        super().__init__(parent, width=self._bw, height=self._bh,
+        # Canvas larger than face to accommodate outer shadow
+        cw = self._bw + 2 * SD
+        ch = self._bh + 2 * SD
+
+        super().__init__(parent, width=cw, height=ch,
                          bd=0, highlightthickness=0, cursor="arrow",
-                         bg=self._bg)
+                         bg=self._cbg)
         self._render()
         self.bind("<ButtonPress-1>",   self._on_press)
         self.bind("<ButtonRelease-1>", self._on_release)
@@ -147,63 +185,18 @@ class iOSButton(tk.Canvas):
 
     def _render(self, pressed=False):
         self.delete("all")
-        w, h = self._bw, self._bh
-        r = self._r
-        top_c, bot_c, border_c = self.PALETTES[self._color]
-        text_c = "#ffffff" if self._color in ("blue", "green", "red") else IOS_TEXT
+        x1, y1 = SD, SD
+        x2, y2 = self._bw + SD, self._bh + SD
 
-        if pressed:
-            top_c = lerp_color(top_c, "#000000", 0.18)
-            bot_c = lerp_color(bot_c, "#000000", 0.18)
+        if pressed or self._state == "disabled":
+            draw_inset(self, x1, y1, x2, y2)
+        else:
+            draw_raised(self, x1, y1, x2, y2)
 
-        if self._state == "disabled":
-            top_c = lerp_color(top_c, "#cccccc", 0.55)
-            bot_c = lerp_color(bot_c, "#cccccc", 0.55)
-            text_c = "#aaaaaa"
-
-        # Two-band iOS gloss gradient: top half is glossy, bottom half is deep
-        split = int(h * 0.50)
-        gloss_top = lerp_color(top_c, "#ffffff", 0.46)
-        gloss_bot = lerp_color(top_c, "#ffffff", 0.12)
-
-        for y in range(h):
-            # Clip x bounds to rounded rectangle shape
-            if y < r:
-                dx = int(r - math.sqrt(max(0.0, r * r - (r - y - 0.5) ** 2)))
-            elif y > h - r - 1:
-                ri = h - 1 - y
-                dx = int(r - math.sqrt(max(0.0, r * r - (r - ri - 0.5) ** 2)))
-            else:
-                dx = 0
-
-            if y <= split:
-                t = y / max(split, 1)
-                color = lerp_color(gloss_top, gloss_bot, t)
-            else:
-                t = (y - split) / max(h - split - 1, 1)
-                color = lerp_color(top_c, bot_c, t)
-
-            x1, x2 = dx, w - dx
-            if x1 < x2:
-                self.create_line(x1, y, x2, y, fill=color)
-
-        # Rounded border
-        self._draw_border(0, 0, w - 1, h - 1, r, border_c)
-
-        # Label
+        text_c = NEU_TEXT_S if self._state == "disabled" else self._color
         ox = 1 if pressed else 0
-        self.create_text(self._bw // 2 + ox, self._bh // 2 + ox + 1,
+        self.create_text((x1 + x2) // 2 + ox, (y1 + y2) // 2 + ox,
                          text=self._text, font=self._font, fill=text_c)
-
-    def _draw_border(self, x1, y1, x2, y2, r, color):
-        self.create_arc(x1,      y1,      x1+2*r, y1+2*r, start=90,  extent=90, style="arc", outline=color)
-        self.create_arc(x2-2*r,  y1,      x2,     y1+2*r, start=0,   extent=90, style="arc", outline=color)
-        self.create_arc(x1,      y2-2*r,  x1+2*r, y2,     start=180, extent=90, style="arc", outline=color)
-        self.create_arc(x2-2*r,  y2-2*r,  x2,     y2,     start=270, extent=90, style="arc", outline=color)
-        self.create_line(x1+r, y1, x2-r, y1, fill=color)
-        self.create_line(x1+r, y2, x2-r, y2, fill=color)
-        self.create_line(x1, y1+r, x1, y2-r, fill=color)
-        self.create_line(x2, y1+r, x2, y2-r, fill=color)
 
     def config(self, **kw):
         changed = False
@@ -244,12 +237,52 @@ class iOSButton(tk.Canvas):
             self._render(pressed=False)
 
 
+class NeuEntry(tk.Canvas):
+    """Neumorphic inset container that embeds a tk.Entry."""
+
+    def __init__(self, parent, textvariable=None, width=40,
+                 font=None, state="normal", bg=None):
+        self._cbg  = bg or NEU_BG
+        self._font = font or NEU_FONT
+        pad = 8
+
+        tmp = tk.Label(parent, text="W" * width, font=self._font)
+        tmp.update_idletasks()
+        tw = tmp.winfo_reqwidth()
+        th = tmp.winfo_reqheight()
+        tmp.destroy()
+
+        self._ew = tw
+        self._eh = th + pad * 2
+
+        cw = self._ew + 2 * SD + pad * 2
+        ch = self._eh + 2 * SD
+
+        super().__init__(parent, width=cw, height=ch,
+                         bd=0, highlightthickness=0, bg=self._cbg)
+
+        x1, y1 = SD, SD
+        x2, y2 = cw - SD, ch - SD
+        draw_inset(self, x1, y1, x2, y2, r=10)
+
+        self.entry = tk.Entry(self,
+                               textvariable=textvariable,
+                               font=self._font,
+                               bg=NEU_BG, fg=NEU_TEXT,
+                               insertbackground=NEU_TEXT,
+                               relief="flat", bd=0,
+                               width=width,
+                               state=state)
+        self.create_window(cw // 2, ch // 2,
+                           window=self.entry, width=self._ew)
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("YouTube → GIF")
         self.resizable(False, False)
-        self.configure(bg=IOS_BG)
+        self.configure(bg=NEU_BG)
         self._apply_style()
         self._build_ui()
         self._check_clipboard_on_focus()
@@ -257,172 +290,176 @@ class App(tk.Tk):
     def _apply_style(self):
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("iOS.Horizontal.TProgressbar",
-                        troughcolor="#dde0e8",
-                        background="#4a90d9",
+        style.configure("Neu.Horizontal.TProgressbar",
+                        troughcolor=lerp_color(NEU_BG, NEU_DARK, 0.3),
+                        background=NEU_ACCENT,
                         borderwidth=0,
-                        thickness=6)
+                        thickness=8)
         style.configure("TCombobox",
-                        fieldbackground=IOS_CARD,
-                        background=IOS_CARD,
-                        foreground=IOS_TEXT,
-                        selectbackground="#007aff",
+                        fieldbackground=NEU_BG,
+                        background=NEU_BG,
+                        foreground=NEU_TEXT,
+                        selectbackground=NEU_ACCENT,
                         selectforeground="#ffffff",
-                        borderwidth=1)
-        self.option_add("*TCombobox*Listbox.background",       IOS_CARD)
-        self.option_add("*TCombobox*Listbox.foreground",       IOS_TEXT)
-        self.option_add("*TCombobox*Listbox.selectBackground", "#007aff")
+                        borderwidth=0,
+                        relief="flat")
+        self.option_add("*TCombobox*Listbox.background",       NEU_BG)
+        self.option_add("*TCombobox*Listbox.foreground",       NEU_TEXT)
+        self.option_add("*TCombobox*Listbox.selectBackground", NEU_ACCENT)
         self.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
-        self.option_add("*TCombobox*Listbox.font",             IOS_FONT)
+        self.option_add("*TCombobox*Listbox.font",             NEU_FONT)
 
-    # ── Navigation bar ─────────────────────────────────────────────────────────
-    def _build_nav(self):
-        nav = tk.Canvas(self, height=44, bd=0, highlightthickness=0,
-                        bg=IOS_NAV_BOT)
-        nav.pack(fill="x")
+    # ── Helpers ────────────────────────────────────────────────────────────────
+    def _label(self, parent, text, font=None, color=None, **pack_kw):
+        tk.Label(parent, text=text,
+                 font=font or NEU_FONT,
+                 bg=NEU_BG, fg=color or NEU_TEXT
+                 ).pack(**pack_kw)
+
+    def _cap(self, parent, text):
+        tk.Label(parent, text=text.upper(),
+                 font=NEU_FONT_CAP, bg=NEU_BG, fg=NEU_TEXT_S,
+                 anchor="w").pack(fill="x", padx=SD + 2, pady=(0, 2))
+
+    def _section(self, parent, title=None):
+        """Neu raised panel container."""
+        if title:
+            self._cap(parent, title)
+        panel = tk.Canvas(parent, bg=NEU_BG, bd=0, highlightthickness=0)
+        panel.pack(fill="x", padx=4, pady=(0, 16))
 
         def draw(event=None):
-            nav.delete("all")
-            w = nav.winfo_width() or 520
-            for y in range(44):
-                nav.create_line(0, y, w, y,
-                                fill=lerp_color(IOS_NAV_TOP, IOS_NAV_BOT, y / 43))
-            nav.create_line(0, 0, w, 0,
-                            fill=lerp_color(IOS_NAV_TOP, "#ffffff", 0.4))  # top sheen
-            nav.create_line(0, 43, w, 43, fill="#1a3560")                  # bottom shadow
-            nav.create_text(w // 2, 22, text="YouTube  →  GIF",
-                            font=IOS_FONT_NAV, fill=IOS_NAV_FG)
+            panel.delete("shadow")
+            w = panel.winfo_width()
+            h = panel.winfo_height()
+            if w < 2 or h < 2:
+                return
+            r = 16
+            for i in range(SD, 0, -1):
+                t = i / SD
+                fill_rrect(panel, -i, -i, w + i - 1, h + i - 1, r,
+                           lerp_color(NEU_BG, NEU_LIGHT, t * 0.75))
+                fill_rrect(panel, i, i, w - i - 1, h - i - 1, r,
+                           lerp_color(NEU_BG, NEU_DARK,  t * 0.55))
+            fill_rrect(panel, 0, 0, w - 1, h - 1, r, NEU_BG)
 
-        nav.bind("<Configure>", draw)
-        self.after(10, draw)
+        panel.bind("<Configure>", draw)
+        inner = tk.Frame(panel, bg=NEU_BG)
+        panel.create_window(0, 0, window=inner, anchor="nw")
 
-    # ── Layout helpers ─────────────────────────────────────────────────────────
-    def _section_label(self, parent, text):
-        tk.Label(parent, text=text.upper(),
-                 font=IOS_FONT_CAP, bg=IOS_BG, fg=IOS_TEXT_SEC,
-                 anchor="w").pack(fill="x", padx=16, pady=(8, 2))
+        def resize(event=None):
+            panel.config(width=inner.winfo_reqwidth(),
+                         height=inner.winfo_reqheight())
 
-    def _card(self, parent):
-        return tk.Frame(parent, bg=IOS_CARD,
-                        highlightbackground=IOS_SEP,
-                        highlightthickness=1)
+        inner.bind("<Configure>", resize)
+        return inner
 
-    def _row_sep(self, card):
-        tk.Frame(card, bg=IOS_SEP, height=1).pack(fill="x", padx=0)
-
-    # ── UI build ───────────────────────────────────────────────────────────────
+    # ── UI ─────────────────────────────────────────────────────────────────────
     def _build_ui(self):
-        self._build_nav()
+        outer = tk.Frame(self, bg=NEU_BG, padx=28, pady=24)
+        outer.pack(fill="both")
 
-        body = tk.Frame(self, bg=IOS_BG)
-        body.pack(fill="both", pady=6)
+        # Header
+        tk.Label(outer, text="YouTube  →  GIF",
+                 font=NEU_FONT_H, bg=NEU_BG, fg=NEU_TEXT
+                 ).pack(pady=(0, 20))
 
-        # ── URL card ───────────────────────────────────────────────────
-        self._section_label(body, "YouTube URL")
-        url_card = self._card(body)
-        url_card.pack(fill="x", padx=12)
-
-        url_row = tk.Frame(url_card, bg=IOS_CARD)
-        url_row.pack(fill="x", padx=10, pady=9)
+        # ── URL ───────────────────────────────────────────────────────
+        self._cap(outer, "YouTube URL")
+        url_row = tk.Frame(outer, bg=NEU_BG)
+        url_row.pack(fill="x", pady=(0, 18))
 
         self.url_var = tk.StringVar()
-        self.url_entry = tk.Entry(url_row,
-                                  textvariable=self.url_var,
-                                  font=IOS_FONT, bg=IOS_CARD, fg=IOS_TEXT,
-                                  insertbackground=IOS_TEXT,
-                                  relief="flat", bd=0, width=44)
-        self.url_entry.pack(side="left", fill="x", expand=True)
-        tk.Frame(url_row, bg=IOS_SEP, width=1).pack(side="left", fill="y", padx=8)
-        iOSButton(url_row, "붙여넣기", self._paste_url,
-                  color="blue", padx=12, pady=4,
-                  font=IOS_FONT_SM, bg=IOS_CARD).pack(side="left")
+        url_entry = NeuEntry(url_row, textvariable=self.url_var, width=38)
+        url_entry.pack(side="left")
+        self.url_entry = url_entry.entry
 
-        # ── Options card ───────────────────────────────────────────────
-        self._section_label(body, "변환 옵션")
-        opt_card = self._card(body)
-        opt_card.pack(fill="x", padx=12)
+        NeuButton(url_row, "붙여넣기", self._paste_url,
+                  min_width=90, padx=14, pady=10,
+                  font=NEU_FONT_SM, color=NEU_ACCENT
+                  ).pack(side="left", padx=(6, 0))
 
-        # FPS row
-        fps_row = tk.Frame(opt_card, bg=IOS_CARD)
-        fps_row.pack(fill="x", padx=14, pady=9)
-        tk.Label(fps_row, text="FPS", font=IOS_FONT,
-                 bg=IOS_CARD, fg=IOS_TEXT, width=10, anchor="w").pack(side="left")
+        # ── Options ───────────────────────────────────────────────────
+        self._cap(outer, "변환 옵션")
+        opt_inner = self._section(outer)
+        opt_inner.configure(padx=16, pady=14)
+
+        opt_row = tk.Frame(opt_inner, bg=NEU_BG)
+        opt_row.pack(fill="x")
+
+        # FPS
+        tk.Label(opt_row, text="FPS", font=NEU_FONT,
+                 bg=NEU_BG, fg=NEU_TEXT_S, width=9, anchor="w").pack(side="left")
         self.fps_var = tk.IntVar(value=15)
-        tk.Spinbox(fps_row, from_=5, to=30, increment=5,
+        tk.Spinbox(opt_row, from_=5, to=30, increment=5,
                    textvariable=self.fps_var,
-                   width=5, font=IOS_FONT,
-                   bg=IOS_CARD, fg=IOS_TEXT,
-                   relief="solid", bd=1,
-                   buttonbackground=IOS_BG).pack(side="left")
+                   width=4, font=NEU_FONT,
+                   bg=NEU_BG, fg=NEU_TEXT,
+                   buttonbackground=NEU_BG,
+                   relief="flat", bd=0).pack(side="left", padx=(0, 24))
 
-        self._row_sep(opt_card)
-
-        # Scale row
-        scale_row = tk.Frame(opt_card, bg=IOS_CARD)
-        scale_row.pack(fill="x", padx=14, pady=9)
-        tk.Label(scale_row, text="가로 크기", font=IOS_FONT,
-                 bg=IOS_CARD, fg=IOS_TEXT, width=10, anchor="w").pack(side="left")
+        # Scale
+        tk.Label(opt_row, text="가로 크기", font=NEU_FONT,
+                 bg=NEU_BG, fg=NEU_TEXT_S).pack(side="left")
         self.scale_var = tk.IntVar(value=480)
-        ttk.Combobox(scale_row, textvariable=self.scale_var,
+        ttk.Combobox(opt_row, textvariable=self.scale_var,
                      values=[240, 320, 480, 640, 720],
-                     width=8, state="readonly",
-                     font=IOS_FONT).pack(side="left")
+                     width=7, state="readonly",
+                     font=NEU_FONT).pack(side="left", padx=(6, 0))
 
-        self._row_sep(opt_card)
+        tk.Frame(opt_inner, bg=lerp_color(NEU_BG, NEU_DARK, 0.25),
+                 height=1).pack(fill="x", pady=12)
 
-        # Directory row
-        dir_row = tk.Frame(opt_card, bg=IOS_CARD)
-        dir_row.pack(fill="x", padx=14, pady=9)
-        tk.Label(dir_row, text="저장 위치", font=IOS_FONT,
-                 bg=IOS_CARD, fg=IOS_TEXT, width=10, anchor="w").pack(side="left")
+        dir_row = tk.Frame(opt_inner, bg=NEU_BG)
+        dir_row.pack(fill="x")
+
+        tk.Label(dir_row, text="저장 위치", font=NEU_FONT,
+                 bg=NEU_BG, fg=NEU_TEXT_S, width=9, anchor="w").pack(side="left")
         self.outdir_var = tk.StringVar(value=OUTPUT_DIR)
         tk.Entry(dir_row, textvariable=self.outdir_var,
-                 font=IOS_FONT_SM, bg=IOS_CARD, fg=IOS_TEXT_SEC,
+                 font=NEU_FONT_SM, bg=NEU_BG, fg=NEU_TEXT_S,
                  relief="flat", bd=0, width=26,
                  state="readonly").pack(side="left", fill="x", expand=True)
-        iOSButton(dir_row, "찾기", self._choose_dir,
-                  color="gray", padx=12, pady=4,
-                  font=IOS_FONT_SM, bg=IOS_CARD).pack(side="right")
+        NeuButton(dir_row, "찾기", self._choose_dir,
+                  min_width=60, padx=12, pady=6,
+                  font=NEU_FONT_SM, color=NEU_ACCENT
+                  ).pack(side="right")
 
-        # ── Convert button ─────────────────────────────────────────────
-        btn_outer = tk.Frame(body, bg=IOS_BG)
-        btn_outer.pack(fill="x", padx=12, pady=(10, 4))
-        self.convert_btn = iOSButton(btn_outer, "GIF 변환 시작", self._start_conversion,
-                                      color="green", min_width=440,
-                                      padx=20, pady=12,
-                                      font=IOS_FONT_B, bg=IOS_BG)
-        self.convert_btn.pack()
+        # ── Convert ───────────────────────────────────────────────────
+        self.convert_btn = NeuButton(outer,
+                                      "GIF 변환 시작", self._start_conversion,
+                                      min_width=400, padx=24, pady=14,
+                                      font=NEU_FONT_B, color=NEU_GREEN)
+        self.convert_btn.pack(pady=(6, 18))
 
-        # ── Status card ────────────────────────────────────────────────
-        self._section_label(body, "상태")
-        status_card = self._card(body)
-        status_card.pack(fill="x", padx=12)
-        status_inner = tk.Frame(status_card, bg=IOS_CARD)
-        status_inner.pack(fill="x", padx=12, pady=9)
+        # ── Status ────────────────────────────────────────────────────
+        self._cap(outer, "상태")
+        status_inner = self._section(outer)
+        status_inner.configure(padx=16, pady=14)
 
         self.progress_lbl = tk.Label(status_inner, text="대기 중...",
-                                      font=IOS_FONT, bg=IOS_CARD, fg=IOS_TEXT_SEC,
+                                      font=NEU_FONT, bg=NEU_BG, fg=NEU_TEXT_S,
                                       anchor="w")
         self.progress_lbl.pack(fill="x")
+
         self.progress = ttk.Progressbar(status_inner, mode="indeterminate",
-                                         length=450, style="iOS.Horizontal.TProgressbar")
-        self.progress.pack(fill="x", pady=(6, 0))
+                                         length=420,
+                                         style="Neu.Horizontal.TProgressbar")
+        self.progress.pack(fill="x", pady=(10, 0))
 
-        # ── Result area ────────────────────────────────────────────────
-        self.result_frame = tk.Frame(body, bg=IOS_BG)
-        self.result_frame.pack(fill="x", padx=12, pady=(6, 8))
+        # ── Result ────────────────────────────────────────────────────
+        self.result_frame = tk.Frame(outer, bg=NEU_BG)
+        self.result_frame.pack(fill="x")
 
-        result_card = self._card(self.result_frame)
-        result_card.pack(side="left", fill="x", expand=True)
-        self.result_lbl = tk.Label(result_card, text="",
-                                    font=IOS_FONT_SM, bg=IOS_CARD, fg=IOS_TEXT,
-                                    wraplength=360, justify="left", anchor="w",
-                                    padx=10, pady=6)
-        self.result_lbl.pack(fill="x")
+        self.result_lbl = tk.Label(self.result_frame, text="",
+                                    font=NEU_FONT_SM, bg=NEU_BG, fg=NEU_TEXT,
+                                    wraplength=400, justify="left", anchor="w")
+        self.result_lbl.pack(side="left", fill="x", expand=True)
 
-        self.open_btn = iOSButton(self.result_frame, "Finder 열기", self._open_in_finder,
-                                   color="blue", padx=12, pady=8,
-                                   font=IOS_FONT_SM, bg=IOS_BG)
+        self.open_btn = NeuButton(self.result_frame, "Finder 열기",
+                                   self._open_in_finder,
+                                   min_width=100, padx=14, pady=8,
+                                   font=NEU_FONT_SM, color=NEU_ACCENT)
         self._last_gif = None
 
     # ── Event handlers ─────────────────────────────────────────────────────────
@@ -465,26 +502,19 @@ class App(tk.Tk):
 
         threading.Thread(
             target=download_and_convert,
-            args=(
-                url,
-                self.outdir_var.get(),
-                self.fps_var,
-                self.scale_var,
-                self._on_progress,
-                self._on_done,
-                self._on_error,
-            ),
+            args=(url, self.outdir_var.get(), self.fps_var, self.scale_var,
+                  self._on_progress, self._on_done, self._on_error),
             daemon=True,
         ).start()
 
     def _on_progress(self, msg):
-        self.after(0, lambda: self.progress_lbl.config(text=msg, fg=IOS_TEXT_SEC))
+        self.after(0, lambda: self.progress_lbl.config(text=msg, fg=NEU_TEXT_S))
 
     def _on_done(self, gif_path):
         self._last_gif = gif_path
         size_mb = os.path.getsize(gif_path) / 1024 / 1024
         self.after(0, lambda: self._finish(
-            f"저장 완료: {gif_path}\n({size_mb:.1f} MB)", success=True))
+            f"저장 완료: {gif_path}  ({size_mb:.1f} MB)", success=True))
 
     def _on_error(self, msg):
         self.after(0, lambda: self._finish(msg, success=False))
@@ -494,10 +524,10 @@ class App(tk.Tk):
         self.convert_btn.config(state="normal")
         self.progress_lbl.config(
             text="완료!" if success else "오류 발생",
-            fg="#1a72d4" if success else "#dd2020")
+            fg=NEU_GREEN if success else NEU_RED)
         self.result_lbl.config(
             text=msg,
-            fg=IOS_TEXT if success else "#dd2020")
+            fg=NEU_TEXT if success else NEU_RED)
         if success and self._last_gif:
             self.open_btn.pack(side="right", padx=(8, 0))
 

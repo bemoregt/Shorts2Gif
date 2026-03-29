@@ -6,7 +6,6 @@ import os
 import re
 import tempfile
 import shutil
-import math
 
 OUTPUT_DIR = os.path.expanduser("~/Downloads")
 
@@ -80,33 +79,37 @@ def download_and_convert(url, output_dir, fps_var, scale_var, on_progress, on_do
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-# ── macOS X Aqua Design System ─────────────────────────────────────────────────
-AQ_BG      = "#ececec"   # window content background
-AQ_CARD    = "#f7f7f7"   # groupbox / card background
-AQ_TB_TOP  = "#d8d8d8"   # title bar gradient top
-AQ_TB_BOT  = "#a8a8a8"   # title bar gradient bottom
-AQ_TB_LINE = "#808080"   # title bar bottom separator
-AQ_BLUE_T  = "#5ab0f8"   # default button gradient top
-AQ_BLUE_B  = "#1060d8"   # default button gradient bottom
-AQ_BLUE_BD = "#0850b8"   # default button border
-AQ_BTN_T   = "#f4f4f4"   # normal button gradient top
-AQ_BTN_B   = "#cccccc"   # normal button gradient bottom
-AQ_BTN_BD  = "#999999"   # normal button border
-AQ_TEXT    = "#1a1a1a"
-AQ_TEXT_S  = "#6d6d72"
-AQ_ENTRY   = "#ffffff"
-AQ_SEP     = "#c0c0c0"
-AQ_FOCUS   = "#5ab0f8"
+# ── SGI IRIX 4Dwm Indigo Magic Design System ──────────────────────────────────
+#  Reference: Silicon Graphics IRIX 5.x / 6.x Indigo Magic desktop
+#  Characteristic blue-gray window body, deep indigo title bar, SGI teal accent.
 
-AQ_RED     = "#ff5f57"   # traffic light — close
-AQ_YELLOW  = "#febc2e"   # traffic light — minimize
-AQ_GREEN   = "#28c840"   # traffic light — zoom
+IDM_WIN_BG  = "#9090a8"   # window / panel body (blue-gray)
+IDM_BODY    = "#a0a0b8"   # slightly lighter body area
+IDM_HI1     = "#d0d0e8"   # bevel highlight outer
+IDM_HI2     = "#b8b8d0"   # bevel highlight inner
+IDM_SH1     = "#505068"   # bevel shadow inner
+IDM_SH2     = "#303050"   # bevel shadow outer
+IDM_TB_TOP  = "#6060c0"   # indigo title bar gradient top
+IDM_TB_BOT  = "#20205a"   # indigo title bar gradient bottom
+IDM_TB_FG   = "#ffffff"
+IDM_TEAL    = "#20d8d8"   # SGI teal / cyan — accent & active highlight
+IDM_TEAL_D  = "#009898"   # darker teal for borders
+IDM_BTN     = "#a0a0bc"   # button face (blue-tinted gray)
+IDM_BTN_HI  = "#d0d0e4"   # button bevel highlight
+IDM_BTN_SH  = "#484860"   # button bevel shadow
+IDM_BTN_P   = "#808098"   # pressed button face
+IDM_TEXT    = "#000000"
+IDM_TEXT_W  = "#ffffff"
+IDM_TEXT_D  = "#606080"   # dimmed text
+IDM_ENTRY   = "#e8e8f8"   # entry field (pale blue-white)
+IDM_SEP     = "#606080"
+IDM_SHELF   = "#303050"   # SGI shelf bar (bottom strip)
 
-AQ_FONT      = ("Lucida Grande", 12)
-AQ_FONT_B    = ("Lucida Grande", 12, "bold")
-AQ_FONT_SM   = ("Lucida Grande", 11)
-AQ_FONT_TITLE = ("Lucida Grande", 13)
-AQ_FONT_CAP  = ("Lucida Grande", 10)
+IDM_FONT    = ("Helvetica", 12)
+IDM_FONT_B  = ("Helvetica", 12, "bold")
+IDM_FONT_SM = ("Helvetica", 10)
+IDM_FONT_T  = ("Helvetica", 13, "bold")
+IDM_FONT_CAP = ("Helvetica", 9, "bold")
 
 
 def lerp_color(c1, c2, t):
@@ -117,20 +120,40 @@ def lerp_color(c1, c2, t):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-class AquaButton(tk.Canvas):
-    """macOS Aqua pill-shaped gradient button."""
+def bevel_rect(canvas, x1, y1, x2, y2, depth=2, raised=True, bg=None):
+    """Draw a Motif-style 3-D bevel rectangle on a Canvas."""
+    face = bg or IDM_BTN
+    hi   = IDM_BTN_HI if raised else IDM_BTN_SH
+    sh   = IDM_BTN_SH if raised else IDM_BTN_HI
+    # Face
+    canvas.create_rectangle(x1 + depth, y1 + depth,
+                             x2 - depth, y2 - depth,
+                             fill=face, outline="")
+    for i in range(depth):
+        t = i / depth
+        c_hi = lerp_color(hi, face, t * 0.5)
+        c_sh = lerp_color(sh, face, t * 0.5)
+        canvas.create_line(x1+i, y1+i, x2-i,   y1+i,   fill=c_hi)  # top
+        canvas.create_line(x1+i, y1+i, x1+i,   y2-i,   fill=c_hi)  # left
+        canvas.create_line(x1+i, y2-i, x2-i+1, y2-i,   fill=c_sh)  # bottom
+        canvas.create_line(x2-i, y1+i, x2-i,   y2-i+1, fill=c_sh)  # right
+
+
+class MotifButton(tk.Canvas):
+    """SGI 4Dwm Motif-style 3-D beveled button."""
 
     def __init__(self, parent, text="", command=None,
-                 default=False, min_width=80, padx=18, pady=6,
-                 font=None, bg=None):
-        self._text    = text
+                 min_width=60, padx=14, pady=5,
+                 font=None, color=None, bg=None, depth=2):
+        self._text   = text
         self._command = command
-        self._default = default   # True → blue button
-        self._state   = "normal"
+        self._state  = "normal"
+        self._color  = color
         self._pressed = False
         self._inside  = False
-        self._font    = font or AQ_FONT
-        self._cbg     = bg or AQ_BG
+        self._font   = font or IDM_FONT
+        self._cbg    = bg or IDM_WIN_BG
+        self._depth  = depth
 
         tmp = tk.Label(parent, text=text, font=self._font)
         tmp.update_idletasks()
@@ -140,7 +163,6 @@ class AquaButton(tk.Canvas):
 
         self._bw = tw + 2 * padx
         self._bh = th + 2 * pady
-        self._r  = self._bh // 2   # pill radius
 
         super().__init__(parent, width=self._bw, height=self._bh,
                          bd=0, highlightthickness=0, cursor="arrow",
@@ -154,61 +176,15 @@ class AquaButton(tk.Canvas):
     def _render(self, pressed=False):
         self.delete("all")
         w, h = self._bw, self._bh
-        r = min(self._r, h // 2)
-
-        if self._default:
-            top_c, bot_c, bdr_c = AQ_BLUE_T, AQ_BLUE_B, AQ_BLUE_BD
-            txt_c = "#ffffff"
-        else:
-            top_c, bot_c, bdr_c = AQ_BTN_T, AQ_BTN_B, AQ_BTN_BD
-            txt_c = AQ_TEXT
-
-        if pressed:
-            top_c = lerp_color(top_c, "#000000", 0.12)
-            bot_c = lerp_color(bot_c, "#000000", 0.12)
-        if self._state == "disabled":
-            top_c = lerp_color(top_c, AQ_BG, 0.45)
-            bot_c = lerp_color(bot_c, AQ_BG, 0.45)
-            txt_c = AQ_TEXT_S
-
-        # Gradient fill clipped to pill shape
-        for y in range(h):
-            t = y / max(h - 1, 1)
-            color = lerp_color(top_c, bot_c, t)
-            if y < r:
-                dx = int(r - math.sqrt(max(0.0, r*r - (r - y - 0.5)**2)))
-            elif y > h - r - 1:
-                ri = h - 1 - y
-                dx = int(r - math.sqrt(max(0.0, r*r - (r - ri - 0.5)**2)))
-            else:
-                dx = 0
-            if dx < w:
-                self.create_line(dx, y, w - dx, y, fill=color)
-
-        # Pill border
-        self._pill_border(0, 0, w - 1, h - 1, r, bdr_c)
-
-        # Inner highlight on top edge (Aqua gloss line)
-        if not pressed and not self._state == "disabled":
-            hi = lerp_color(top_c, "#ffffff", 0.55)
-            if 1 < r:
-                dx1 = int(r - math.sqrt(max(0.0, r*r - (r - 1.5)**2)))
-                self.create_line(dx1, 1, w - dx1, 1, fill=hi)
-
-        # Label
+        d = self._depth
+        face = IDM_BTN_P if pressed else IDM_BTN
+        bevel_rect(self, 0, 0, w - 1, h - 1,
+                   depth=d, raised=not pressed, bg=face)
+        tc = IDM_TEXT_D if self._state == "disabled" \
+             else (self._color or IDM_TEXT)
         ox = 1 if pressed else 0
         self.create_text(w // 2 + ox, h // 2 + ox,
-                         text=self._text, font=self._font, fill=txt_c)
-
-    def _pill_border(self, x1, y1, x2, y2, r, color):
-        self.create_arc(x1,      y1,      x1+2*r, y1+2*r, start=90,  extent=90, style="arc", outline=color)
-        self.create_arc(x2-2*r,  y1,      x2,     y1+2*r, start=0,   extent=90, style="arc", outline=color)
-        self.create_arc(x1,      y2-2*r,  x1+2*r, y2,     start=180, extent=90, style="arc", outline=color)
-        self.create_arc(x2-2*r,  y2-2*r,  x2,     y2,     start=270, extent=90, style="arc", outline=color)
-        self.create_line(x1+r, y1, x2-r, y1, fill=color)
-        self.create_line(x1+r, y2, x2-r, y2, fill=color)
-        self.create_line(x1, y1+r, x1, y2-r, fill=color)
-        self.create_line(x2, y1+r, x2, y2-r, fill=color)
+                         text=self._text, font=self._font, fill=tc)
 
     def config(self, **kw):
         changed = False
@@ -254,7 +230,7 @@ class App(tk.Tk):
         super().__init__()
         self.title("YouTube → GIF")
         self.resizable(False, False)
-        self.configure(bg=AQ_BG)
+        self.configure(bg=IDM_SH2)
         self.overrideredirect(True)
         self._drag_x = self._drag_y = 0
         self._apply_style()
@@ -266,83 +242,139 @@ class App(tk.Tk):
         self.geometry(f"+{(sw - self.winfo_reqwidth()) // 2}"
                       f"+{(sh - self.winfo_reqheight()) // 2}")
 
-    # ── Style ──────────────────────────────────────────────────────────────────
+    # ── ttk style ──────────────────────────────────────────────────────────────
     def _apply_style(self):
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("Aqua.Horizontal.TProgressbar",
-                        troughcolor="#d0d0d8",
-                        background=AQ_FOCUS,
-                        borderwidth=0,
-                        thickness=8)
+        style.configure("IDM.Horizontal.TProgressbar",
+                        troughcolor=IDM_SH2,
+                        background=IDM_TEAL,
+                        borderwidth=1,
+                        thickness=10)
         style.configure("TCombobox",
-                        fieldbackground=AQ_ENTRY,
-                        background=AQ_CARD,
-                        foreground=AQ_TEXT,
-                        selectbackground=AQ_FOCUS,
-                        selectforeground="#ffffff",
+                        fieldbackground=IDM_ENTRY,
+                        background=IDM_BTN,
+                        foreground=IDM_TEXT,
+                        selectbackground=IDM_TEAL,
+                        selectforeground="#000000",
                         borderwidth=1)
-        self.option_add("*TCombobox*Listbox.background",       AQ_ENTRY)
-        self.option_add("*TCombobox*Listbox.foreground",       AQ_TEXT)
-        self.option_add("*TCombobox*Listbox.selectBackground", AQ_FOCUS)
-        self.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
-        self.option_add("*TCombobox*Listbox.font",             AQ_FONT)
+        self.option_add("*TCombobox*Listbox.background",       IDM_ENTRY)
+        self.option_add("*TCombobox*Listbox.foreground",       IDM_TEXT)
+        self.option_add("*TCombobox*Listbox.selectBackground", IDM_TEAL)
+        self.option_add("*TCombobox*Listbox.selectForeground", "#000000")
+        self.option_add("*TCombobox*Listbox.font",             IDM_FONT)
 
     # ── Title bar ──────────────────────────────────────────────────────────────
     def _build_title_bar(self, parent):
-        tb = tk.Canvas(parent, height=28, bd=0, highlightthickness=0,
-                       bg=AQ_TB_BOT)
+        tb = tk.Canvas(parent, height=26, bd=0, highlightthickness=0,
+                       bg=IDM_TB_BOT)
         tb.pack(fill="x")
         self._tb = tb
 
-        # Traffic-light ovals (drawn as canvas items; always above gradient)
-        lights = [
-            (AQ_RED,    lerp_color(AQ_RED,    "#000000", 0.18), self.destroy),
-            (AQ_YELLOW, lerp_color(AQ_YELLOW, "#000000", 0.18), self.iconify),
-            (AQ_GREEN,  lerp_color(AQ_GREEN,  "#000000", 0.18), lambda: None),
+        # Window-menu square (left)
+        wm = tb.create_rectangle(4, 4, 20, 22,
+                                  fill=IDM_BTN, outline=IDM_BTN_SH, tags="tbctrl")
+        tb.create_text(12, 13, text="▤", font=("Helvetica", 8),
+                       fill=IDM_TEXT, tags="tbctrl")
+
+        # Right-side control buttons: minimize, maximize, close
+        ctrl_specs = [
+            (None,        self.iconify,  "_"),
+            (None,        lambda: None, "□"),
+            (IDM_TEAL,    self.destroy,  "×"),
         ]
-        self._light_ids = []
-        for i, (fill, outline, cmd) in enumerate(lights):
-            x0 = 10 + i * 18
-            oid = tb.create_oval(x0, 8, x0 + 12, 20,
-                                 fill=fill, outline=outline, tags="lights")
-            tb.tag_bind(oid, "<Button-1>", lambda e, c=cmd: c())
-            self._light_ids.append(oid)
+        self._tb_btns = []
+        for i, (accent, cmd, sym) in enumerate(ctrl_specs):
+            rx1 = self._tb_btn_x(i)
+            face = accent if accent else IDM_BTN
+            rid = tb.create_rectangle(rx1, 4, rx1 + 18, 22,
+                                       fill=face, outline=IDM_BTN_SH,
+                                       tags="tbctrl")
+            tid = tb.create_text(rx1 + 9, 13, text=sym,
+                                  font=IDM_FONT_SM,
+                                  fill=IDM_TEXT_W if accent else IDM_TEXT,
+                                  tags="tbctrl")
+            for item in (rid, tid):
+                tb.tag_bind(item, "<Button-1>", lambda e, c=cmd: c())
+            self._tb_btns.append((rid, tid))
 
         def draw(event=None):
             tb.delete("tbbg")
-            w = tb.winfo_width() or 540
-            for y in range(28):
+            w = tb.winfo_width() or 560
+            # Indigo gradient
+            for y in range(26):
                 tb.create_line(0, y, w, y,
-                               fill=lerp_color(AQ_TB_TOP, AQ_TB_BOT, y / 27),
+                               fill=lerp_color(IDM_TB_TOP, IDM_TB_BOT, y / 25),
                                tags="tbbg")
-            tb.create_line(0, 27, w, 27, fill=AQ_TB_LINE, tags="tbbg")
+            # Teal accent stripe at top
+            tb.create_line(0, 0, w, 0, fill=IDM_TEAL,   tags="tbbg")
+            tb.create_line(0, 1, w, 1, fill=IDM_TEAL_D, tags="tbbg")
+            # Bottom separator
+            tb.create_line(0, 25, w, 25, fill=IDM_SH2, tags="tbbg")
+            # Title
             tb.create_text(w // 2, 13,
                            text="YouTube  →  GIF  Converter",
-                           font=AQ_FONT_TITLE, fill="#333333", tags="tbbg")
-            tb.tag_lower("tbbg")   # keep gradient below traffic lights
+                           font=IDM_FONT_T, fill=IDM_TB_FG, tags="tbbg")
+            tb.tag_lower("tbbg")
+            # Re-position right-side buttons after resize
+            for i, (rid, tid) in enumerate(self._tb_btns):
+                rx1 = self._tb_btn_x(i, w)
+                tb.coords(rid, rx1, 4, rx1 + 18, 22)
+                tb.coords(tid, rx1 + 9, 13)
 
         tb.bind("<Configure>", draw)
         self.after(10, draw)
+        tb.bind("<ButtonPress-1>", self._drag_start)
+        tb.bind("<B1-Motion>",     self._drag_move)
 
-        # Drag on title bar background
-        tb.bind("<ButtonPress-1>",  self._drag_start)
-        tb.bind("<B1-Motion>",      self._drag_move)
+    def _tb_btn_x(self, idx, total_w=None):
+        w = total_w or (self._tb.winfo_width() or 560)
+        return w - 24 - idx * 22
 
-    # ── Group box ──────────────────────────────────────────────────────────────
-    def _group(self, parent, title=""):
-        """macOS HIG–style group box: small label + white card."""
-        outer = tk.Frame(parent, bg=AQ_BG)
-        outer.pack(fill="x", padx=14, pady=(0, 10))
+    # ── Thick window border ────────────────────────────────────────────────────
+    def _window_border(self, parent):
+        """Draw outer Motif-style thick raised border using nested frames."""
+        # Outer shadow (2px)
+        f1 = tk.Frame(parent, bg=IDM_HI1, bd=0)
+        f1.pack(fill="both", expand=True, padx=0, pady=0)
+        f2 = tk.Frame(f1, bg=IDM_HI2, bd=0)
+        f2.pack(fill="both", expand=True, padx=1, pady=1)
+        f3 = tk.Frame(f2, bg=IDM_SH1, bd=0)
+        f3.pack(fill="both", expand=True, padx=1, pady=1)
+        f4 = tk.Frame(f3, bg=IDM_SH2, bd=0)
+        f4.pack(fill="both", expand=True, padx=1, pady=1)
+        inner = tk.Frame(f4, bg=IDM_WIN_BG, bd=0)
+        inner.pack(fill="both", expand=True, padx=1, pady=1)
+        return inner
+
+    # ── Grooved section frame ──────────────────────────────────────────────────
+    def _grooved(self, parent, title=""):
+        """Motif-style grooved/etched label frame."""
+        outer = tk.Frame(parent, bg=IDM_WIN_BG)
+        outer.pack(fill="x", padx=10, pady=(0, 8))
+
         if title:
-            tk.Label(outer, text=title,
-                     font=AQ_FONT_CAP, bg=AQ_BG, fg=AQ_TEXT_S,
-                     anchor="w").pack(fill="x", pady=(0, 3))
-        card = tk.Frame(outer, bg=AQ_CARD,
-                        highlightbackground=AQ_SEP,
-                        highlightthickness=1)
-        card.pack(fill="x")
-        inner = tk.Frame(card, bg=AQ_CARD, padx=12, pady=10)
+            hdr = tk.Frame(outer, bg=IDM_WIN_BG)
+            hdr.pack(fill="x", pady=(0, 2))
+            # Teal left accent bar
+            tk.Frame(hdr, bg=IDM_TEAL, width=4).pack(side="left", fill="y")
+            tk.Label(hdr, text=title,
+                     font=IDM_FONT_CAP, bg=IDM_WIN_BG, fg=IDM_TEAL,
+                     padx=4, pady=1).pack(side="left")
+            tk.Frame(hdr, bg=IDM_SEP, height=1).pack(side="left",
+                                                       fill="x", expand=True)
+
+        # Grooved box: outer dark, inner light
+        groove = tk.Frame(outer,
+                          highlightbackground=IDM_SH1,
+                          highlightthickness=1)
+        groove.pack(fill="x")
+        highlight = tk.Frame(groove,
+                              highlightbackground=IDM_HI1,
+                              highlightthickness=1,
+                              bg=IDM_BODY)
+        highlight.pack(fill="x", padx=1, pady=1)
+        inner = tk.Frame(highlight, bg=IDM_BODY, padx=10, pady=8)
         inner.pack(fill="x")
         return inner
 
@@ -350,131 +382,146 @@ class App(tk.Tk):
     def _entry(self, parent, var, width, state="normal", small=False):
         return tk.Entry(parent,
                         textvariable=var,
-                        font=AQ_FONT_SM if small else AQ_FONT,
-                        bg=AQ_ENTRY, fg=AQ_TEXT,
-                        insertbackground=AQ_TEXT,
-                        disabledbackground=AQ_CARD,
-                        disabledforeground=AQ_TEXT_S,
+                        font=IDM_FONT_SM if small else IDM_FONT,
+                        bg=IDM_ENTRY, fg=IDM_TEXT,
+                        insertbackground=IDM_TEXT,
+                        disabledbackground=IDM_WIN_BG,
+                        disabledforeground=IDM_TEXT_D,
+                        selectbackground=IDM_TEAL,
+                        selectforeground="#000000",
                         relief="sunken", bd=2,
-                        highlightcolor=AQ_FOCUS,
-                        highlightthickness=0,
                         width=width, state=state)
+
+    # ── Shelf (SGI bottom toolbar strip) ───────────────────────────────────────
+    def _build_shelf(self, parent):
+        shelf = tk.Frame(parent, bg=IDM_SHELF, height=22)
+        shelf.pack(fill="x", side="bottom")
+        shelf.pack_propagate(False)
+        # Teal top accent line
+        tk.Frame(shelf, bg=IDM_TEAL, height=2).pack(fill="x")
+        tk.Label(shelf, text="SGI  IRIX  Indigo Magic",
+                 font=IDM_FONT_SM, bg=IDM_SHELF, fg=IDM_TEAL,
+                 anchor="w", padx=8).pack(side="left", fill="y")
 
     # ── UI ─────────────────────────────────────────────────────────────────────
     def _build_ui(self):
         self._build_title_bar(self)
 
-        # Window body border
-        tk.Frame(self, bg=AQ_SEP, height=1).pack(fill="x")
+        # Thick raised window border wraps all content
+        content = self._window_border(self)
 
-        body = tk.Frame(self, bg=AQ_BG)
-        body.pack(fill="both", pady=10)
+        self._build_shelf(content)
 
-        # ── URL group ──────────────────────────────────────────────────
-        url_inner = self._group(body, "YouTube URL")
+        body = tk.Frame(content, bg=IDM_WIN_BG, padx=0, pady=8)
+        body.pack(fill="both")
 
-        url_row = tk.Frame(url_inner, bg=AQ_CARD)
+        # ── URL ────────────────────────────────────────────────────────
+        url_inner = self._grooved(body, "YOUTUBE URL")
+
+        url_row = tk.Frame(url_inner, bg=IDM_BODY)
         url_row.pack(fill="x")
 
         self.url_var = tk.StringVar()
         self.url_entry = self._entry(url_row, self.url_var, width=40)
         self.url_entry.pack(side="left", fill="x", expand=True)
 
-        AquaButton(url_row, "붙여넣기", self._paste_url,
-                   min_width=80, padx=12, pady=4,
-                   font=AQ_FONT_SM, bg=AQ_CARD
-                   ).pack(side="left", padx=(6, 0))
+        MotifButton(url_row, "붙여넣기", self._paste_url,
+                    min_width=80, padx=12, pady=4,
+                    font=IDM_FONT_SM, bg=IDM_BODY
+                    ).pack(side="left", padx=(6, 0))
 
-        # ── Options group ──────────────────────────────────────────────
-        opt_inner = self._group(body, "변환 옵션")
+        # ── Options ────────────────────────────────────────────────────
+        opt_inner = self._grooved(body, "CONVERSION OPTIONS")
 
-        row1 = tk.Frame(opt_inner, bg=AQ_CARD)
+        row1 = tk.Frame(opt_inner, bg=IDM_BODY)
         row1.pack(fill="x")
 
-        # FPS
-        tk.Label(row1, text="FPS", font=AQ_FONT,
-                 bg=AQ_CARD, fg=AQ_TEXT,
+        tk.Label(row1, text="FPS:", font=IDM_FONT,
+                 bg=IDM_BODY, fg=IDM_TEXT,
                  width=10, anchor="w").pack(side="left")
         self.fps_var = tk.IntVar(value=15)
         tk.Spinbox(row1, from_=5, to=30, increment=5,
                    textvariable=self.fps_var,
-                   width=4, font=AQ_FONT,
-                   bg=AQ_ENTRY, fg=AQ_TEXT,
-                   buttonbackground=AQ_CARD,
+                   width=4, font=IDM_FONT,
+                   bg=IDM_ENTRY, fg=IDM_TEXT,
+                   buttonbackground=IDM_BTN,
+                   selectbackground=IDM_TEAL,
                    relief="sunken", bd=2
                    ).pack(side="left", padx=(0, 20))
 
-        # Scale
-        tk.Label(row1, text="가로 크기", font=AQ_FONT,
-                 bg=AQ_CARD, fg=AQ_TEXT).pack(side="left")
+        tk.Label(row1, text="가로 크기:", font=IDM_FONT,
+                 bg=IDM_BODY, fg=IDM_TEXT).pack(side="left")
         self.scale_var = tk.IntVar(value=480)
         ttk.Combobox(row1, textvariable=self.scale_var,
                      values=[240, 320, 480, 640, 720],
                      width=7, state="readonly",
-                     font=AQ_FONT).pack(side="left", padx=(6, 0))
+                     font=IDM_FONT).pack(side="left", padx=(6, 0))
 
-        # Separator
-        tk.Frame(opt_inner, bg=AQ_SEP, height=1).pack(fill="x", pady=8)
+        # Grooved separator
+        tk.Frame(opt_inner, bg=IDM_SH1,  height=1).pack(fill="x", pady=(8, 0))
+        tk.Frame(opt_inner, bg=IDM_HI1,  height=1).pack(fill="x", pady=(0, 8))
 
-        row2 = tk.Frame(opt_inner, bg=AQ_CARD)
+        row2 = tk.Frame(opt_inner, bg=IDM_BODY)
         row2.pack(fill="x")
 
-        tk.Label(row2, text="저장 위치", font=AQ_FONT,
-                 bg=AQ_CARD, fg=AQ_TEXT,
+        tk.Label(row2, text="저장 위치:", font=IDM_FONT,
+                 bg=IDM_BODY, fg=IDM_TEXT,
                  width=10, anchor="w").pack(side="left")
         self.outdir_var = tk.StringVar(value=OUTPUT_DIR)
         self._entry(row2, self.outdir_var, width=28,
                     state="readonly", small=True
                     ).pack(side="left", fill="x", expand=True)
-        AquaButton(row2, "찾기", self._choose_dir,
-                   min_width=60, padx=12, pady=4,
-                   font=AQ_FONT_SM, bg=AQ_CARD
-                   ).pack(side="right", padx=(6, 0))
+        MotifButton(row2, "찾아보기", self._choose_dir,
+                    min_width=80, padx=12, pady=4,
+                    font=IDM_FONT_SM, bg=IDM_BODY
+                    ).pack(side="right", padx=(6, 0))
 
-        # ── Divider ────────────────────────────────────────────────────
-        tk.Frame(body, bg=AQ_SEP, height=1).pack(fill="x", padx=14, pady=(0, 10))
+        # ── Button row ─────────────────────────────────────────────────
+        # Etched separator
+        tk.Frame(body, bg=IDM_SH1,  height=1).pack(fill="x", padx=10)
+        tk.Frame(body, bg=IDM_HI1,  height=1).pack(fill="x", padx=10, pady=(0, 8))
 
-        # ── Action buttons ─────────────────────────────────────────────
-        btn_row = tk.Frame(body, bg=AQ_BG)
-        btn_row.pack(pady=(0, 10))
+        btn_row = tk.Frame(body, bg=IDM_WIN_BG)
+        btn_row.pack(pady=(0, 8))
 
-        AquaButton(btn_row, "닫기", self.destroy,
-                   min_width=80, padx=16, pady=7,
-                   font=AQ_FONT).pack(side="left", padx=4)
-
-        self.convert_btn = AquaButton(btn_row, "GIF 변환 시작",
-                                       self._start_conversion,
-                                       default=True,
-                                       min_width=200, padx=22, pady=7,
-                                       font=AQ_FONT_B)
+        self.convert_btn = MotifButton(btn_row, "GIF 변환 시작",
+                                        self._start_conversion,
+                                        min_width=260, padx=20, pady=8,
+                                        font=IDM_FONT_B, color=IDM_TEAL,
+                                        depth=3)
         self.convert_btn.pack(side="left", padx=4)
 
-        # ── Status group ───────────────────────────────────────────────
-        status_inner = self._group(body, "상태")
+        MotifButton(btn_row, "닫기", self.destroy,
+                    min_width=80, padx=16, pady=8,
+                    font=IDM_FONT).pack(side="left", padx=4)
+
+        # ── Status ─────────────────────────────────────────────────────
+        status_inner = self._grooved(body, "STATUS")
 
         self.progress_lbl = tk.Label(status_inner, text="대기 중...",
-                                      font=AQ_FONT, bg=AQ_CARD, fg=AQ_TEXT_S,
-                                      anchor="w")
+                                      font=IDM_FONT, bg=IDM_BODY,
+                                      fg=IDM_TEXT_D, anchor="w")
         self.progress_lbl.pack(fill="x")
 
         self.progress = ttk.Progressbar(status_inner, mode="indeterminate",
                                          length=460,
-                                         style="Aqua.Horizontal.TProgressbar")
+                                         style="IDM.Horizontal.TProgressbar")
         self.progress.pack(fill="x", pady=(6, 0))
 
         # ── Result ─────────────────────────────────────────────────────
-        self.result_frame = tk.Frame(body, bg=AQ_BG)
-        self.result_frame.pack(fill="x", padx=14, pady=(0, 6))
+        self.result_frame = tk.Frame(body, bg=IDM_WIN_BG)
+        self.result_frame.pack(fill="x", padx=10, pady=(0, 4))
 
         self.result_lbl = tk.Label(self.result_frame, text="",
-                                    font=AQ_FONT_SM, bg=AQ_BG, fg=AQ_TEXT,
-                                    wraplength=420, justify="left", anchor="w")
+                                    font=IDM_FONT_SM, bg=IDM_WIN_BG,
+                                    fg=IDM_TEXT, wraplength=420,
+                                    justify="left", anchor="w")
         self.result_lbl.pack(side="left", fill="x", expand=True)
 
-        self.open_btn = AquaButton(self.result_frame, "Finder 열기",
-                                    self._open_in_finder,
-                                    min_width=100, padx=14, pady=6,
-                                    font=AQ_FONT_SM)
+        self.open_btn = MotifButton(self.result_frame, "Finder 열기",
+                                     self._open_in_finder,
+                                     min_width=100, padx=14, pady=6,
+                                     font=IDM_FONT_SM)
         self._last_gif = None
 
     # ── Drag ───────────────────────────────────────────────────────────────────
@@ -531,7 +578,7 @@ class App(tk.Tk):
         ).start()
 
     def _on_progress(self, msg):
-        self.after(0, lambda: self.progress_lbl.config(text=msg, fg=AQ_TEXT_S))
+        self.after(0, lambda: self.progress_lbl.config(text=msg, fg=IDM_TEXT))
 
     def _on_done(self, gif_path):
         self._last_gif = gif_path
@@ -547,10 +594,10 @@ class App(tk.Tk):
         self.convert_btn.config(state="normal")
         self.progress_lbl.config(
             text="완료!" if success else "오류 발생",
-            fg=AQ_FOCUS if success else "#cc2222")
+            fg=IDM_TEAL if success else "#e04040")
         self.result_lbl.config(
             text=msg,
-            fg=AQ_TEXT if success else "#cc2222")
+            fg=IDM_TEXT if success else "#e04040")
         if success and self._last_gif:
             self.open_btn.pack(side="right", padx=(8, 0))
 

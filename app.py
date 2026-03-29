@@ -257,7 +257,7 @@ class App(tk.Tk):
     def _apply_style(self):
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("iOS.TProgressbar",
+        style.configure("iOS.Horizontal.TProgressbar",
                         troughcolor="#dde0e8",
                         background="#4a90d9",
                         borderwidth=0,
@@ -405,7 +405,7 @@ class App(tk.Tk):
                                       anchor="w")
         self.progress_lbl.pack(fill="x")
         self.progress = ttk.Progressbar(status_inner, mode="indeterminate",
-                                         length=450, style="iOS.TProgressbar")
+                                         length=450, style="iOS.Horizontal.TProgressbar")
         self.progress.pack(fill="x", pady=(6, 0))
 
         # ── Result area ────────────────────────────────────────────────

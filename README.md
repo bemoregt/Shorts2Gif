@@ -7,6 +7,12 @@ Windows 2000 스타일의 레트로 UI로 제작되었습니다.
 
 ---
 
+## 변환 예시
+
+![demo](ond4rhJW08A.gif)
+
+---
+
 ## 스크린샷
 
 ![ScrShot 6](ScrShot%206.png)

@@ -79,87 +79,42 @@ def download_and_convert(url, output_dir, fps_var, scale_var, on_progress, on_do
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-# ── Neumorphism Design System ──────────────────────────────────────────────────
-NEU_BG      = "#e0e5ec"   # single unified background
-NEU_LIGHT   = "#ffffff"   # highlight shadow color
-NEU_DARK    = "#a3b1c6"   # depth shadow color
-NEU_TEXT    = "#31456a"   # primary text
-NEU_TEXT_S  = "#8899aa"   # secondary / muted text
-NEU_ACCENT  = "#5b84b1"   # accent blue
-NEU_GREEN   = "#4e9a6a"   # success green
-NEU_RED     = "#aa4444"   # error red
+# ── NeXTStep Design System ─────────────────────────────────────────────────────
+NS_BG        = "#2d2d2d"   # window background (dark charcoal)
+NS_DARKER    = "#1a1a1a"   # title bar / panel headers
+NS_PANEL     = "#363636"   # inspector panel body
+NS_BTN_FACE  = "#545454"   # button face
+NS_BTN_HI    = "#8a8a8a"   # bevel highlight (top-left)
+NS_BTN_SH    = "#0f0f0f"   # bevel shadow (bottom-right)
+NS_BTN_PRESS = "#3c3c3c"   # pressed face
+NS_AMBER     = "#f0c000"   # NeXT amber — close box / accent
+NS_TEXT      = "#e8e8e8"   # primary text
+NS_TEXT_D    = "#707070"   # dimmed / disabled
+NS_ENTRY_BG  = "#d4d4d4"   # entry field (light, high contrast)
+NS_ENTRY_FG  = "#000000"
+NS_SEP       = "#555555"
 
-NEU_FONT    = ("Helvetica Neue", 12)
-NEU_FONT_B  = ("Helvetica Neue", 13, "bold")
-NEU_FONT_SM = ("Helvetica Neue", 10)
-NEU_FONT_H  = ("Helvetica Neue", 20, "bold")
-NEU_FONT_CAP = ("Helvetica Neue", 9)
-
-SD = 5   # shadow depth (offset pixels)
-SR = 12  # default corner radius
-
-
-def lerp_color(c1, c2, t):
-    t = max(0.0, min(1.0, t))
-    r = int(int(c1[1:3], 16) + (int(c2[1:3], 16) - int(c1[1:3], 16)) * t)
-    g = int(int(c1[3:5], 16) + (int(c2[3:5], 16) - int(c1[3:5], 16)) * t)
-    b = int(int(c1[5:7], 16) + (int(c2[5:7], 16) - int(c1[5:7], 16)) * t)
-    return f"#{r:02x}{g:02x}{b:02x}"
+NS_FONT      = ("Helvetica", 12)
+NS_FONT_B    = ("Helvetica", 12, "bold")
+NS_FONT_SM   = ("Helvetica", 10)
+NS_FONT_TITLE = ("Helvetica", 13, "bold")
+NS_FONT_HDR  = ("Helvetica", 9, "bold")
 
 
-def fill_rrect(canvas, x1, y1, x2, y2, r, color):
-    """Fill a rounded rectangle on a Canvas."""
-    r = max(0, min(r, (x2 - x1) // 2, (y2 - y1) // 2))
-    canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=color, outline="")
-    canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=color, outline="")
-    if r > 0:
-        for ox, oy in ((x1, y1), (x2 - 2*r, y1), (x1, y2 - 2*r), (x2 - 2*r, y2 - 2*r)):
-            canvas.create_oval(ox, oy, ox + 2*r, oy + 2*r, fill=color, outline="")
-
-
-def draw_raised(canvas, x1, y1, x2, y2, r=SR, steps=SD):
-    """Draw neumorphic raised (extruded) shadow layers, then fill face."""
-    for i in range(steps, 0, -1):
-        t = i / steps
-        light = lerp_color(NEU_BG, NEU_LIGHT, t * 0.85)
-        dark  = lerp_color(NEU_BG, NEU_DARK,  t * 0.65)
-        fill_rrect(canvas, x1 - i, y1 - i, x2 - i, y2 - i, r, light)
-        fill_rrect(canvas, x1 + i, y1 + i, x2 + i, y2 + i, r, dark)
-    fill_rrect(canvas, x1, y1, x2, y2, r, NEU_BG)
-
-
-def draw_inset(canvas, x1, y1, x2, y2, r=SR, steps=SD):
-    """Draw neumorphic inset (pressed) shadow layers."""
-    fill_rrect(canvas, x1, y1, x2, y2, r, NEU_BG)
-    for i in range(1, steps + 1):
-        t = i / steps
-        dark  = lerp_color(NEU_BG, NEU_DARK,  t * 0.45)
-        light = lerp_color(NEU_BG, NEU_LIGHT, t * 0.70)
-        x1c, y1c, x2c, y2c = x1 + r//2, y1 + r//2, x2 - r//2, y2 - r//2
-        if y1c + i <= y2c:
-            canvas.create_line(x1c, y1c + i, x2c, y1c + i, fill=dark)
-        if x1c + i <= x2c:
-            canvas.create_line(x1c + i, y1c, x1c + i, y2c, fill=dark)
-        if y2c - i >= y1c:
-            canvas.create_line(x1c, y2c - i, x2c, y2c - i, fill=light)
-        if x2c - i >= x1c:
-            canvas.create_line(x2c - i, y1c, x2c - i, y2c, fill=light)
-
-
-class NeuButton(tk.Canvas):
-    """Neumorphic button: raised at rest, inset when pressed."""
+class NSButton(tk.Canvas):
+    """NeXTStep beveled button drawn on a Canvas."""
 
     def __init__(self, parent, text="", command=None,
-                 min_width=80, padx=20, pady=10,
+                 min_width=60, padx=14, pady=5,
                  font=None, color=None, bg=None):
         self._text    = text
         self._command = command
         self._state   = "normal"
-        self._color   = color or NEU_TEXT   # text/icon accent color
+        self._color   = color
         self._pressed = False
         self._inside  = False
-        self._font    = font or NEU_FONT
-        self._cbg     = bg or NEU_BG
+        self._font    = font or NS_FONT
+        self._cbg     = bg or NS_BG
 
         tmp = tk.Label(parent, text=text, font=self._font)
         tmp.update_idletasks()
@@ -170,11 +125,7 @@ class NeuButton(tk.Canvas):
         self._bw = tw + 2 * padx
         self._bh = th + 2 * pady
 
-        # Canvas larger than face to accommodate outer shadow
-        cw = self._bw + 2 * SD
-        ch = self._bh + 2 * SD
-
-        super().__init__(parent, width=cw, height=ch,
+        super().__init__(parent, width=self._bw, height=self._bh,
                          bd=0, highlightthickness=0, cursor="arrow",
                          bg=self._cbg)
         self._render()
@@ -185,18 +136,33 @@ class NeuButton(tk.Canvas):
 
     def _render(self, pressed=False):
         self.delete("all")
-        x1, y1 = SD, SD
-        x2, y2 = self._bw + SD, self._bh + SD
+        w, h = self._bw, self._bh
 
-        if pressed or self._state == "disabled":
-            draw_inset(self, x1, y1, x2, y2)
-        else:
-            draw_raised(self, x1, y1, x2, y2)
+        face     = NS_BTN_PRESS if pressed else NS_BTN_FACE
+        hi, sh   = (NS_BTN_SH, NS_BTN_HI) if pressed else (NS_BTN_HI, NS_BTN_SH)
+        inner_hi = "#3a3a3a" if pressed else "#6a6a6a"
+        inner_sh = "#6a6a6a" if pressed else "#2a2a2a"
 
-        text_c = NEU_TEXT_S if self._state == "disabled" else self._color
+        # Face
+        self.create_rectangle(1, 1, w - 2, h - 2, fill=face, outline="")
+
+        # Outer bevel
+        self.create_line(0,   0,   w,     0,   fill=hi)   # top
+        self.create_line(0,   0,   0,     h,   fill=hi)   # left
+        self.create_line(0,   h-1, w,     h-1, fill=sh)   # bottom
+        self.create_line(w-1, 0,   w-1,   h,   fill=sh)   # right
+
+        # Inner bevel (1 px inside)
+        self.create_line(1,   1,   w-2,   1,   fill=inner_hi)
+        self.create_line(1,   1,   1,     h-2, fill=inner_hi)
+        self.create_line(1,   h-2, w-1,   h-2, fill=inner_sh)
+        self.create_line(w-2, 1,   w-2,   h-1, fill=inner_sh)
+
+        # Label
+        tc = NS_TEXT_D if self._state == "disabled" else (self._color or NS_TEXT)
         ox = 1 if pressed else 0
-        self.create_text((x1 + x2) // 2 + ox, (y1 + y2) // 2 + ox,
-                         text=self._text, font=self._font, fill=text_c)
+        self.create_text(w // 2 + ox, h // 2 + ox,
+                         text=self._text, font=self._font, fill=tc)
 
     def config(self, **kw):
         changed = False
@@ -237,230 +203,242 @@ class NeuButton(tk.Canvas):
             self._render(pressed=False)
 
 
-class NeuEntry(tk.Canvas):
-    """Neumorphic inset container that embeds a tk.Entry."""
-
-    def __init__(self, parent, textvariable=None, width=40,
-                 font=None, state="normal", bg=None):
-        self._cbg  = bg or NEU_BG
-        self._font = font or NEU_FONT
-        pad = 8
-
-        tmp = tk.Label(parent, text="W" * width, font=self._font)
-        tmp.update_idletasks()
-        tw = tmp.winfo_reqwidth()
-        th = tmp.winfo_reqheight()
-        tmp.destroy()
-
-        self._ew = tw
-        self._eh = th + pad * 2
-
-        cw = self._ew + 2 * SD + pad * 2
-        ch = self._eh + 2 * SD
-
-        super().__init__(parent, width=cw, height=ch,
-                         bd=0, highlightthickness=0, bg=self._cbg)
-
-        x1, y1 = SD, SD
-        x2, y2 = cw - SD, ch - SD
-        draw_inset(self, x1, y1, x2, y2, r=10)
-
-        self.entry = tk.Entry(self,
-                               textvariable=textvariable,
-                               font=self._font,
-                               bg=NEU_BG, fg=NEU_TEXT,
-                               insertbackground=NEU_TEXT,
-                               relief="flat", bd=0,
-                               width=width,
-                               state=state)
-        self.create_window(cw // 2, ch // 2,
-                           window=self.entry, width=self._ew)
-
-
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("YouTube → GIF")
         self.resizable(False, False)
-        self.configure(bg=NEU_BG)
+        self.configure(bg=NS_DARKER)
+        self.overrideredirect(True)       # custom title bar
+        self._drag_x = self._drag_y = 0
         self._apply_style()
         self._build_ui()
         self._check_clipboard_on_focus()
+        # Center on screen
+        self.update_idletasks()
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        w  = self.winfo_reqwidth()
+        h  = self.winfo_reqheight()
+        self.geometry(f"+{(sw - w) // 2}+{(sh - h) // 2}")
 
+    # ── Style ──────────────────────────────────────────────────────────────────
     def _apply_style(self):
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("Neu.Horizontal.TProgressbar",
-                        troughcolor=lerp_color(NEU_BG, NEU_DARK, 0.3),
-                        background=NEU_ACCENT,
-                        borderwidth=0,
-                        thickness=8)
+        style.configure("NS.Horizontal.TProgressbar",
+                        troughcolor=NS_DARKER,
+                        background=NS_AMBER,
+                        borderwidth=1,
+                        thickness=10)
         style.configure("TCombobox",
-                        fieldbackground=NEU_BG,
-                        background=NEU_BG,
-                        foreground=NEU_TEXT,
-                        selectbackground=NEU_ACCENT,
-                        selectforeground="#ffffff",
-                        borderwidth=0,
-                        relief="flat")
-        self.option_add("*TCombobox*Listbox.background",       NEU_BG)
-        self.option_add("*TCombobox*Listbox.foreground",       NEU_TEXT)
-        self.option_add("*TCombobox*Listbox.selectBackground", NEU_ACCENT)
-        self.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
-        self.option_add("*TCombobox*Listbox.font",             NEU_FONT)
+                        fieldbackground=NS_ENTRY_BG,
+                        background=NS_BTN_FACE,
+                        foreground=NS_ENTRY_FG,
+                        selectbackground=NS_AMBER,
+                        selectforeground=NS_DARKER,
+                        borderwidth=1)
+        self.option_add("*TCombobox*Listbox.background",       NS_ENTRY_BG)
+        self.option_add("*TCombobox*Listbox.foreground",       NS_ENTRY_FG)
+        self.option_add("*TCombobox*Listbox.selectBackground", NS_AMBER)
+        self.option_add("*TCombobox*Listbox.selectForeground", NS_DARKER)
+        self.option_add("*TCombobox*Listbox.font",             NS_FONT)
 
-    # ── Helpers ────────────────────────────────────────────────────────────────
-    def _label(self, parent, text, font=None, color=None, **pack_kw):
-        tk.Label(parent, text=text,
-                 font=font or NEU_FONT,
-                 bg=NEU_BG, fg=color or NEU_TEXT
-                 ).pack(**pack_kw)
+    # ── Title bar ──────────────────────────────────────────────────────────────
+    def _build_title_bar(self, parent):
+        bar = tk.Frame(parent, bg=NS_DARKER, height=28)
+        bar.pack(fill="x")
+        bar.pack_propagate(False)
 
-    def _cap(self, parent, text):
-        tk.Label(parent, text=text.upper(),
-                 font=NEU_FONT_CAP, bg=NEU_BG, fg=NEU_TEXT_S,
-                 anchor="w").pack(fill="x", padx=SD + 2, pady=(0, 2))
+        # Amber close box
+        close_c = tk.Canvas(bar, width=14, height=14,
+                            bg=NS_DARKER, bd=0, highlightthickness=0)
+        close_c.create_rectangle(0, 0, 13, 13, fill=NS_AMBER, outline=NS_BTN_SH)
+        close_c.pack(side="left", padx=(8, 3), pady=7)
+        close_c.bind("<Button-1>", lambda e: self.destroy())
 
-    def _section(self, parent, title=None):
-        """Neu raised panel container."""
-        if title:
-            self._cap(parent, title)
-        panel = tk.Canvas(parent, bg=NEU_BG, bd=0, highlightthickness=0)
-        panel.pack(fill="x", padx=4, pady=(0, 16))
+        # Gray miniaturize box
+        mini_c = tk.Canvas(bar, width=14, height=14,
+                           bg=NS_DARKER, bd=0, highlightthickness=0)
+        mini_c.create_rectangle(0, 0, 13, 13, fill=NS_BTN_FACE, outline=NS_BTN_SH)
+        mini_c.pack(side="left", padx=(0, 8), pady=7)
+        mini_c.bind("<Button-1>", lambda e: self.iconify())
 
-        def draw(event=None):
-            panel.delete("shadow")
-            w = panel.winfo_width()
-            h = panel.winfo_height()
-            if w < 2 or h < 2:
-                return
-            r = 16
-            for i in range(SD, 0, -1):
-                t = i / SD
-                fill_rrect(panel, -i, -i, w + i - 1, h + i - 1, r,
-                           lerp_color(NEU_BG, NEU_LIGHT, t * 0.75))
-                fill_rrect(panel, i, i, w - i - 1, h - i - 1, r,
-                           lerp_color(NEU_BG, NEU_DARK,  t * 0.55))
-            fill_rrect(panel, 0, 0, w - 1, h - 1, r, NEU_BG)
+        # 1px separator line (amber stripe)
+        tk.Frame(bar, bg=NS_AMBER, width=1).pack(side="left", fill="y", pady=4)
 
-        panel.bind("<Configure>", draw)
-        inner = tk.Frame(panel, bg=NEU_BG)
-        panel.create_window(0, 0, window=inner, anchor="nw")
+        title_lbl = tk.Label(bar, text="  YouTube  →  GIF  Converter",
+                             font=NS_FONT_TITLE, bg=NS_DARKER, fg=NS_TEXT,
+                             anchor="w")
+        title_lbl.pack(side="left", fill="y")
 
-        def resize(event=None):
-            panel.config(width=inner.winfo_reqwidth(),
-                         height=inner.winfo_reqheight())
+        # Drag bindings
+        for w in (bar, title_lbl):
+            w.bind("<ButtonPress-1>",  self._drag_start)
+            w.bind("<B1-Motion>",      self._drag_move)
 
-        inner.bind("<Configure>", resize)
+    # ── Inspector panel ────────────────────────────────────────────────────────
+    def _panel(self, parent, title):
+        """NeXTStep inspector-style panel: dark header + lighter body."""
+        wrapper = tk.Frame(parent, bg=NS_BG)
+        wrapper.pack(fill="x", padx=10, pady=(0, 8))
+
+        # Header strip
+        hdr = tk.Frame(wrapper, bg=NS_DARKER)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text=title,
+                 font=NS_FONT_HDR, bg=NS_DARKER, fg=NS_AMBER,
+                 anchor="w", padx=8, pady=3).pack(fill="x")
+
+        # Etched border body
+        body = tk.Frame(wrapper, bg=NS_PANEL,
+                        highlightbackground=NS_BTN_SH,
+                        highlightthickness=1)
+        body.pack(fill="x")
+        inner = tk.Frame(body, bg=NS_PANEL, padx=10, pady=10)
+        inner.pack(fill="x")
         return inner
+
+    # ── Entry helper ───────────────────────────────────────────────────────────
+    def _entry(self, parent, textvariable, width, state="normal", small=False):
+        font = NS_FONT_SM if small else NS_FONT
+        return tk.Entry(parent,
+                        textvariable=textvariable,
+                        font=font,
+                        bg=NS_ENTRY_BG, fg=NS_ENTRY_FG,
+                        insertbackground=NS_ENTRY_FG,
+                        disabledbackground=NS_PANEL,
+                        disabledforeground=NS_TEXT_D,
+                        relief="sunken", bd=2,
+                        width=width, state=state)
+
+    # ── Separator ──────────────────────────────────────────────────────────────
+    def _sep(self, parent):
+        tk.Frame(parent, bg=NS_BTN_SH, height=1).pack(fill="x", pady=6)
+        tk.Frame(parent, bg=NS_BTN_HI, height=1).pack(fill="x")
 
     # ── UI ─────────────────────────────────────────────────────────────────────
     def _build_ui(self):
-        outer = tk.Frame(self, bg=NEU_BG, padx=28, pady=24)
-        outer.pack(fill="both")
+        self._build_title_bar(self)
 
-        # Header
-        tk.Label(outer, text="YouTube  →  GIF",
-                 font=NEU_FONT_H, bg=NEU_BG, fg=NEU_TEXT
-                 ).pack(pady=(0, 20))
+        # Etched window border (1px dark + 1px lighter)
+        tk.Frame(self, bg=NS_BTN_SH, height=1).pack(fill="x")
+        tk.Frame(self, bg=NS_SEP,    height=1).pack(fill="x")
 
-        # ── URL ───────────────────────────────────────────────────────
-        self._cap(outer, "YouTube URL")
-        url_row = tk.Frame(outer, bg=NEU_BG)
-        url_row.pack(fill="x", pady=(0, 18))
+        body = tk.Frame(self, bg=NS_BG, padx=0, pady=8)
+        body.pack(fill="both")
+
+        # ── URL panel ──────────────────────────────────────────────────
+        url_inner = self._panel(body, "YOUTUBE URL")
+
+        url_row = tk.Frame(url_inner, bg=NS_PANEL)
+        url_row.pack(fill="x")
 
         self.url_var = tk.StringVar()
-        url_entry = NeuEntry(url_row, textvariable=self.url_var, width=38)
-        url_entry.pack(side="left")
-        self.url_entry = url_entry.entry
+        self.url_entry = self._entry(url_row, self.url_var, width=40)
+        self.url_entry.pack(side="left", fill="x", expand=True)
 
-        NeuButton(url_row, "붙여넣기", self._paste_url,
-                  min_width=90, padx=14, pady=10,
-                  font=NEU_FONT_SM, color=NEU_ACCENT
-                  ).pack(side="left", padx=(6, 0))
+        NSButton(url_row, "붙여넣기", self._paste_url,
+                 min_width=80, padx=12, pady=4,
+                 font=NS_FONT_SM, bg=NS_PANEL
+                 ).pack(side="left", padx=(6, 0))
 
-        # ── Options ───────────────────────────────────────────────────
-        self._cap(outer, "변환 옵션")
-        opt_inner = self._section(outer)
-        opt_inner.configure(padx=16, pady=14)
+        # ── Options panel ──────────────────────────────────────────────
+        opt_inner = self._panel(body, "CONVERSION OPTIONS")
 
-        opt_row = tk.Frame(opt_inner, bg=NEU_BG)
+        opt_row = tk.Frame(opt_inner, bg=NS_PANEL)
         opt_row.pack(fill="x")
 
         # FPS
-        tk.Label(opt_row, text="FPS", font=NEU_FONT,
-                 bg=NEU_BG, fg=NEU_TEXT_S, width=9, anchor="w").pack(side="left")
+        tk.Label(opt_row, text="FPS:", font=NS_FONT,
+                 bg=NS_PANEL, fg=NS_TEXT,
+                 width=10, anchor="w").pack(side="left")
         self.fps_var = tk.IntVar(value=15)
         tk.Spinbox(opt_row, from_=5, to=30, increment=5,
                    textvariable=self.fps_var,
-                   width=4, font=NEU_FONT,
-                   bg=NEU_BG, fg=NEU_TEXT,
-                   buttonbackground=NEU_BG,
-                   relief="flat", bd=0).pack(side="left", padx=(0, 24))
+                   width=4, font=NS_FONT,
+                   bg=NS_ENTRY_BG, fg=NS_ENTRY_FG,
+                   buttonbackground=NS_BTN_FACE,
+                   relief="sunken", bd=2
+                   ).pack(side="left", padx=(0, 20))
 
         # Scale
-        tk.Label(opt_row, text="가로 크기", font=NEU_FONT,
-                 bg=NEU_BG, fg=NEU_TEXT_S).pack(side="left")
+        tk.Label(opt_row, text="가로 크기:", font=NS_FONT,
+                 bg=NS_PANEL, fg=NS_TEXT).pack(side="left")
         self.scale_var = tk.IntVar(value=480)
         ttk.Combobox(opt_row, textvariable=self.scale_var,
                      values=[240, 320, 480, 640, 720],
                      width=7, state="readonly",
-                     font=NEU_FONT).pack(side="left", padx=(6, 0))
+                     font=NS_FONT).pack(side="left", padx=(6, 0))
 
-        tk.Frame(opt_inner, bg=lerp_color(NEU_BG, NEU_DARK, 0.25),
-                 height=1).pack(fill="x", pady=12)
+        self._sep(opt_inner)
 
-        dir_row = tk.Frame(opt_inner, bg=NEU_BG)
+        dir_row = tk.Frame(opt_inner, bg=NS_PANEL)
         dir_row.pack(fill="x")
 
-        tk.Label(dir_row, text="저장 위치", font=NEU_FONT,
-                 bg=NEU_BG, fg=NEU_TEXT_S, width=9, anchor="w").pack(side="left")
+        tk.Label(dir_row, text="저장 위치:", font=NS_FONT,
+                 bg=NS_PANEL, fg=NS_TEXT,
+                 width=10, anchor="w").pack(side="left")
         self.outdir_var = tk.StringVar(value=OUTPUT_DIR)
-        tk.Entry(dir_row, textvariable=self.outdir_var,
-                 font=NEU_FONT_SM, bg=NEU_BG, fg=NEU_TEXT_S,
-                 relief="flat", bd=0, width=26,
-                 state="readonly").pack(side="left", fill="x", expand=True)
-        NeuButton(dir_row, "찾기", self._choose_dir,
-                  min_width=60, padx=12, pady=6,
-                  font=NEU_FONT_SM, color=NEU_ACCENT
-                  ).pack(side="right")
+        self._entry(dir_row, self.outdir_var, width=28,
+                    state="readonly", small=True
+                    ).pack(side="left", fill="x", expand=True)
+        NSButton(dir_row, "찾아보기", self._choose_dir,
+                 min_width=80, padx=12, pady=4,
+                 font=NS_FONT_SM, bg=NS_PANEL
+                 ).pack(side="right", padx=(6, 0))
 
-        # ── Convert ───────────────────────────────────────────────────
-        self.convert_btn = NeuButton(outer,
-                                      "GIF 변환 시작", self._start_conversion,
-                                      min_width=400, padx=24, pady=14,
-                                      font=NEU_FONT_B, color=NEU_GREEN)
-        self.convert_btn.pack(pady=(6, 18))
+        # ── Convert button row ─────────────────────────────────────────
+        tk.Frame(body, bg=NS_BTN_SH, height=1).pack(fill="x", padx=10)
+        tk.Frame(body, bg=NS_SEP,    height=1).pack(fill="x", padx=10)
 
-        # ── Status ────────────────────────────────────────────────────
-        self._cap(outer, "상태")
-        status_inner = self._section(outer)
-        status_inner.configure(padx=16, pady=14)
+        btn_row = tk.Frame(body, bg=NS_BG)
+        btn_row.pack(pady=10)
+
+        self.convert_btn = NSButton(btn_row, "GIF 변환 시작", self._start_conversion,
+                                     min_width=280, padx=20, pady=8,
+                                     font=NS_FONT_B, color=NS_AMBER)
+        self.convert_btn.pack(side="left", padx=4)
+
+        NSButton(btn_row, "닫기", self.destroy,
+                 min_width=80, padx=16, pady=8,
+                 font=NS_FONT).pack(side="left", padx=4)
+
+        # ── Status panel ───────────────────────────────────────────────
+        status_inner = self._panel(body, "STATUS")
 
         self.progress_lbl = tk.Label(status_inner, text="대기 중...",
-                                      font=NEU_FONT, bg=NEU_BG, fg=NEU_TEXT_S,
+                                      font=NS_FONT, bg=NS_PANEL, fg=NS_TEXT_D,
                                       anchor="w")
         self.progress_lbl.pack(fill="x")
 
         self.progress = ttk.Progressbar(status_inner, mode="indeterminate",
-                                         length=420,
-                                         style="Neu.Horizontal.TProgressbar")
-        self.progress.pack(fill="x", pady=(10, 0))
+                                         length=460,
+                                         style="NS.Horizontal.TProgressbar")
+        self.progress.pack(fill="x", pady=(6, 0))
 
-        # ── Result ────────────────────────────────────────────────────
-        self.result_frame = tk.Frame(outer, bg=NEU_BG)
-        self.result_frame.pack(fill="x")
+        # ── Result area ────────────────────────────────────────────────
+        self.result_frame = tk.Frame(body, bg=NS_BG)
+        self.result_frame.pack(fill="x", padx=10, pady=(0, 6))
 
         self.result_lbl = tk.Label(self.result_frame, text="",
-                                    font=NEU_FONT_SM, bg=NEU_BG, fg=NEU_TEXT,
-                                    wraplength=400, justify="left", anchor="w")
+                                    font=NS_FONT_SM, bg=NS_BG, fg=NS_TEXT,
+                                    wraplength=420, justify="left", anchor="w")
         self.result_lbl.pack(side="left", fill="x", expand=True)
 
-        self.open_btn = NeuButton(self.result_frame, "Finder 열기",
-                                   self._open_in_finder,
-                                   min_width=100, padx=14, pady=8,
-                                   font=NEU_FONT_SM, color=NEU_ACCENT)
+        self.open_btn = NSButton(self.result_frame, "Finder 열기",
+                                  self._open_in_finder,
+                                  min_width=100, padx=14, pady=6,
+                                  font=NS_FONT_SM)
         self._last_gif = None
+
+    # ── Drag ───────────────────────────────────────────────────────────────────
+    def _drag_start(self, event):
+        self._drag_x = event.x_root - self.winfo_x()
+        self._drag_y = event.y_root - self.winfo_y()
+
+    def _drag_move(self, event):
+        self.geometry(f"+{event.x_root - self._drag_x}+{event.y_root - self._drag_y}")
 
     # ── Event handlers ─────────────────────────────────────────────────────────
     def _check_clipboard_on_focus(self):
@@ -508,7 +486,7 @@ class App(tk.Tk):
         ).start()
 
     def _on_progress(self, msg):
-        self.after(0, lambda: self.progress_lbl.config(text=msg, fg=NEU_TEXT_S))
+        self.after(0, lambda: self.progress_lbl.config(text=msg, fg=NS_TEXT))
 
     def _on_done(self, gif_path):
         self._last_gif = gif_path
@@ -524,10 +502,10 @@ class App(tk.Tk):
         self.convert_btn.config(state="normal")
         self.progress_lbl.config(
             text="완료!" if success else "오류 발생",
-            fg=NEU_GREEN if success else NEU_RED)
+            fg=NS_AMBER if success else "#cc4444")
         self.result_lbl.config(
             text=msg,
-            fg=NEU_TEXT if success else NEU_RED)
+            fg=NS_TEXT if success else "#cc4444")
         if success and self._last_gif:
             self.open_btn.pack(side="right", padx=(8, 0))
 

@@ -7,6 +7,14 @@ Windows 2000 스타일의 레트로 UI로 제작되었습니다.
 
 ---
 
+## 스크린샷
+
+![ScrShot 6](ScrShot%206.png)
+![ScrShot 12](ScrShot%2012.png)
+![ScrShot 13](ScrShot%2013.png)
+
+---
+
 ## 기능
 
 - YouTube Shorts, 일반 watch 링크, youtu.be 단축 URL 지원

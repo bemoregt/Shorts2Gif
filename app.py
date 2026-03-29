@@ -79,94 +79,65 @@ def download_and_convert(url, output_dir, fps_var, scale_var, on_progress, on_do
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-# ── SGI IRIX 4Dwm Indigo Magic Design System ──────────────────────────────────
-#  Reference: Silicon Graphics IRIX 5.x / 6.x Indigo Magic desktop
-#  Characteristic blue-gray window body, deep indigo title bar, SGI teal accent.
+# ── Windows 2000 Aesthetic — text ×2 ──────────────────────────────────────────
+W2K_BG       = "#d4d0c8"
+W2K_DARK     = "#808080"
+W2K_LIGHT    = "#ffffff"
+W2K_FACE     = "#d4d0c8"
+W2K_TEXT     = "#000000"
+W2K_TITLE_BG = "#000080"
+W2K_TITLE_FG = "#ffffff"
+W2K_ENTRY    = "#ffffff"
+W2K_SEL_BG   = "#000080"
+W2K_SEL_FG   = "#ffffff"
 
-IDM_WIN_BG  = "#9090a8"   # window / panel body (blue-gray)
-IDM_BODY    = "#a0a0b8"   # slightly lighter body area
-IDM_HI1     = "#d0d0e8"   # bevel highlight outer
-IDM_HI2     = "#b8b8d0"   # bevel highlight inner
-IDM_SH1     = "#505068"   # bevel shadow inner
-IDM_SH2     = "#303050"   # bevel shadow outer
-IDM_TB_TOP  = "#6060c0"   # indigo title bar gradient top
-IDM_TB_BOT  = "#20205a"   # indigo title bar gradient bottom
-IDM_TB_FG   = "#ffffff"
-IDM_TEAL    = "#20d8d8"   # SGI teal / cyan — accent & active highlight
-IDM_TEAL_D  = "#009898"   # darker teal for borders
-IDM_BTN     = "#a0a0bc"   # button face (blue-tinted gray)
-IDM_BTN_HI  = "#d0d0e4"   # button bevel highlight
-IDM_BTN_SH  = "#484860"   # button bevel shadow
-IDM_BTN_P   = "#808098"   # pressed button face
-IDM_TEXT    = "#000000"
-IDM_TEXT_W  = "#ffffff"
-IDM_TEXT_D  = "#606080"   # dimmed text
-IDM_ENTRY   = "#e8e8f8"   # entry field (pale blue-white)
-IDM_SEP     = "#606080"
-IDM_SHELF   = "#303050"   # SGI shelf bar (bottom strip)
-
-IDM_FONT    = ("Helvetica", 12)
-IDM_FONT_B  = ("Helvetica", 12, "bold")
-IDM_FONT_SM = ("Helvetica", 10)
-IDM_FONT_T  = ("Helvetica", 13, "bold")
-IDM_FONT_CAP = ("Helvetica", 9, "bold")
+# All fonts doubled (8→16, 7→14)
+W2K_FONT    = ("Tahoma", 16)
+W2K_FONT_B  = ("Tahoma", 16, "bold")
+W2K_FONT_SM = ("Tahoma", 14)
 
 
-def lerp_color(c1, c2, t):
-    t = max(0.0, min(1.0, t))
-    r = int(int(c1[1:3], 16) + (int(c2[1:3], 16) - int(c1[1:3], 16)) * t)
-    g = int(int(c1[3:5], 16) + (int(c2[3:5], 16) - int(c1[3:5], 16)) * t)
-    b = int(int(c1[5:7], 16) + (int(c2[5:7], 16) - int(c1[5:7], 16)) * t)
-    return f"#{r:02x}{g:02x}{b:02x}"
+class Win2KButton(tk.Canvas):
+    """Pixel-accurate Windows 2000 raised button — text size ×2."""
 
-
-def bevel_rect(canvas, x1, y1, x2, y2, depth=2, raised=True, bg=None):
-    """Draw a Motif-style 3-D bevel rectangle on a Canvas."""
-    face = bg or IDM_BTN
-    hi   = IDM_BTN_HI if raised else IDM_BTN_SH
-    sh   = IDM_BTN_SH if raised else IDM_BTN_HI
-    # Face
-    canvas.create_rectangle(x1 + depth, y1 + depth,
-                             x2 - depth, y2 - depth,
-                             fill=face, outline="")
-    for i in range(depth):
-        t = i / depth
-        c_hi = lerp_color(hi, face, t * 0.5)
-        c_sh = lerp_color(sh, face, t * 0.5)
-        canvas.create_line(x1+i, y1+i, x2-i,   y1+i,   fill=c_hi)  # top
-        canvas.create_line(x1+i, y1+i, x1+i,   y2-i,   fill=c_hi)  # left
-        canvas.create_line(x1+i, y2-i, x2-i+1, y2-i,   fill=c_sh)  # bottom
-        canvas.create_line(x2-i, y1+i, x2-i,   y2-i+1, fill=c_sh)  # right
-
-
-class MotifButton(tk.Canvas):
-    """SGI 4Dwm Motif-style 3-D beveled button."""
+    FACE   = "#d4d0c8"
+    HI_OUT = "#ffffff"
+    HI_IN  = "#e0ddd6"
+    SH_IN  = "#808080"
+    SH_OUT = "#404040"
+    TEXT_N = "#000000"
+    TEXT_D = "#808080"
+    TEXT_S = "#ffffff"
 
     def __init__(self, parent, text="", command=None,
-                 min_width=60, padx=14, pady=5,
-                 font=None, color=None, bg=None, depth=2):
-        self._text   = text
-        self._command = command
-        self._state  = "normal"
-        self._color  = color
-        self._pressed = False
-        self._inside  = False
-        self._font   = font or IDM_FONT
-        self._cbg    = bg or IDM_WIN_BG
-        self._depth  = depth
+                 width=None, padx=16, pady=6,
+                 font=None, default="normal", state="normal"):
+        self._font_spec = font or W2K_FONT
+        self._text      = text
+        self._command   = command
+        self._state     = state
+        self._default   = default
+        self._pressed   = False
+        self._inside    = False
 
-        tmp = tk.Label(parent, text=text, font=self._font)
+        tmp = tk.Label(parent, text=text, font=self._font_spec)
         tmp.update_idletasks()
-        tw = max(tmp.winfo_reqwidth(), min_width - 2 * padx)
+        tw = tmp.winfo_reqwidth()
         th = tmp.winfo_reqheight()
         tmp.destroy()
 
-        self._bw = tw + 2 * padx
-        self._bh = th + 2 * pady
+        if width is not None:
+            tmp2 = tk.Label(parent, text="W" * width, font=self._font_spec)
+            tmp2.update_idletasks()
+            tw = max(tw, tmp2.winfo_reqwidth())
+            tmp2.destroy()
 
-        super().__init__(parent, width=self._bw, height=self._bh,
-                         bd=0, highlightthickness=0, cursor="arrow",
-                         bg=self._cbg)
+        self._bw = tw + 2 * padx + 4
+        self._bh = th + 2 * pady + 4
+
+        super().__init__(parent,
+                         width=self._bw, height=self._bh,
+                         bd=0, highlightthickness=0, cursor="arrow")
         self._render()
         self.bind("<ButtonPress-1>",   self._on_press)
         self.bind("<ButtonRelease-1>", self._on_release)
@@ -175,26 +146,47 @@ class MotifButton(tk.Canvas):
 
     def _render(self, pressed=False):
         self.delete("all")
-        w, h = self._bw, self._bh
-        d = self._depth
-        face = IDM_BTN_P if pressed else IDM_BTN
-        bevel_rect(self, 0, 0, w - 1, h - 1,
-                   depth=d, raised=not pressed, bg=face)
-        tc = IDM_TEXT_D if self._state == "disabled" \
-             else (self._color or IDM_TEXT)
+        w, h = self._bw - 1, self._bh - 1
+
+        hi_out = self.SH_OUT if pressed else self.HI_OUT
+        hi_in  = self.SH_IN  if pressed else self.HI_IN
+        sh_in  = self.HI_IN  if pressed else self.SH_IN
+        sh_out = self.HI_OUT if pressed else self.SH_OUT
+
+        self.create_rectangle(2, 2, w - 1, h - 1, fill=self.FACE, outline="")
+
+        self.create_line(0, 0, w,     0,     fill=hi_out)
+        self.create_line(0, 0, 0,     h,     fill=hi_out)
+        self.create_line(0, h, w + 1, h,     fill=sh_out)
+        self.create_line(w, 0, w,     h,     fill=sh_out)
+
+        self.create_line(1, 1, w - 1,     1,     fill=hi_in)
+        self.create_line(1, 1, 1,         h - 1, fill=hi_in)
+        self.create_line(1, h - 1, w - 1, h - 1, fill=sh_in)
+        self.create_line(w - 1, 1, w - 1, h - 1, fill=sh_in)
+
+        if self._default == "active" and not pressed:
+            self.create_rectangle(0, 0, w, h, outline="#000000", fill="")
+
         ox = 1 if pressed else 0
-        self.create_text(w // 2 + ox, h // 2 + ox,
-                         text=self._text, font=self._font, fill=tc)
+        cx, cy = self._bw // 2 + ox, self._bh // 2 + ox
+
+        if self._state == "disabled":
+            self.create_text(cx + 1, cy + 1, text=self._text,
+                             font=self._font_spec, fill=self.TEXT_S)
+            self.create_text(cx, cy, text=self._text,
+                             font=self._font_spec, fill=self.TEXT_D)
+        else:
+            self.create_text(cx, cy, text=self._text,
+                             font=self._font_spec, fill=self.TEXT_N)
 
     def config(self, **kw):
-        changed = False
-        if "state" in kw:
-            self._state = kw["state"]
-            changed = True
-        if "text" in kw:
-            self._text = kw["text"]
-            changed = True
-        if changed:
+        for key in ("state", "default", "text"):
+            if key in kw:
+                setattr(self, f"_{key}", kw[key])
+        if "font" in kw:
+            self._font_spec = kw["font"]
+        if kw:
             self._render(pressed=self._pressed)
 
     def configure(self, **kw):
@@ -225,312 +217,181 @@ class MotifButton(tk.Canvas):
             self._render(pressed=False)
 
 
+def w2k_btn(parent, text, command, width=None, font=None,
+            default="normal", padx=16, pady=6):
+    return Win2KButton(parent, text=text, command=command,
+                       width=width, font=font, default=default,
+                       padx=padx, pady=pady)
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("YouTube → GIF")
+        self.title("YouTube Shorts → GIF Converter")
         self.resizable(False, False)
-        self.configure(bg=IDM_SH2)
-        self.overrideredirect(True)
-        self._drag_x = self._drag_y = 0
-        self._apply_style()
+        self.configure(bg=W2K_BG)
+        self._apply_w2k_style()
         self._build_ui()
         self._check_clipboard_on_focus()
-        self.update_idletasks()
-        sw = self.winfo_screenwidth()
-        sh = self.winfo_screenheight()
-        self.geometry(f"+{(sw - self.winfo_reqwidth()) // 2}"
-                      f"+{(sh - self.winfo_reqheight()) // 2}")
 
-    # ── ttk style ──────────────────────────────────────────────────────────────
-    def _apply_style(self):
+    def _apply_w2k_style(self):
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("IDM.Horizontal.TProgressbar",
-                        troughcolor=IDM_SH2,
-                        background=IDM_TEAL,
-                        borderwidth=1,
-                        thickness=10)
+        style.configure("TProgressbar",
+                        troughcolor="#c0c0c0",
+                        background=W2K_TITLE_BG,
+                        borderwidth=2,
+                        relief="sunken")
         style.configure("TCombobox",
-                        fieldbackground=IDM_ENTRY,
-                        background=IDM_BTN,
-                        foreground=IDM_TEXT,
-                        selectbackground=IDM_TEAL,
-                        selectforeground="#000000",
-                        borderwidth=1)
-        self.option_add("*TCombobox*Listbox.background",       IDM_ENTRY)
-        self.option_add("*TCombobox*Listbox.foreground",       IDM_TEXT)
-        self.option_add("*TCombobox*Listbox.selectBackground", IDM_TEAL)
-        self.option_add("*TCombobox*Listbox.selectForeground", "#000000")
-        self.option_add("*TCombobox*Listbox.font",             IDM_FONT)
+                        fieldbackground=W2K_ENTRY,
+                        background=W2K_FACE,
+                        foreground=W2K_TEXT,
+                        selectbackground=W2K_SEL_BG,
+                        selectforeground=W2K_SEL_FG,
+                        arrowcolor=W2K_TEXT)
+        self.option_add("*TCombobox*Listbox.background",       W2K_ENTRY)
+        self.option_add("*TCombobox*Listbox.foreground",       W2K_TEXT)
+        self.option_add("*TCombobox*Listbox.selectBackground", W2K_SEL_BG)
+        self.option_add("*TCombobox*Listbox.selectForeground", W2K_SEL_FG)
+        self.option_add("*TCombobox*Listbox.font",             W2K_FONT)
 
-    # ── Title bar ──────────────────────────────────────────────────────────────
-    def _build_title_bar(self, parent):
-        tb = tk.Canvas(parent, height=26, bd=0, highlightthickness=0,
-                       bg=IDM_TB_BOT)
-        tb.pack(fill="x")
-        self._tb = tb
-
-        # Window-menu square (left)
-        wm = tb.create_rectangle(4, 4, 20, 22,
-                                  fill=IDM_BTN, outline=IDM_BTN_SH, tags="tbctrl")
-        tb.create_text(12, 13, text="▤", font=("Helvetica", 8),
-                       fill=IDM_TEXT, tags="tbctrl")
-
-        # Right-side control buttons: minimize, maximize, close
-        ctrl_specs = [
-            (None,        self.iconify,  "_"),
-            (None,        lambda: None, "□"),
-            (IDM_TEAL,    self.destroy,  "×"),
-        ]
-        self._tb_btns = []
-        for i, (accent, cmd, sym) in enumerate(ctrl_specs):
-            rx1 = self._tb_btn_x(i)
-            face = accent if accent else IDM_BTN
-            rid = tb.create_rectangle(rx1, 4, rx1 + 18, 22,
-                                       fill=face, outline=IDM_BTN_SH,
-                                       tags="tbctrl")
-            tid = tb.create_text(rx1 + 9, 13, text=sym,
-                                  font=IDM_FONT_SM,
-                                  fill=IDM_TEXT_W if accent else IDM_TEXT,
-                                  tags="tbctrl")
-            for item in (rid, tid):
-                tb.tag_bind(item, "<Button-1>", lambda e, c=cmd: c())
-            self._tb_btns.append((rid, tid))
-
-        def draw(event=None):
-            tb.delete("tbbg")
-            w = tb.winfo_width() or 560
-            # Indigo gradient
-            for y in range(26):
-                tb.create_line(0, y, w, y,
-                               fill=lerp_color(IDM_TB_TOP, IDM_TB_BOT, y / 25),
-                               tags="tbbg")
-            # Teal accent stripe at top
-            tb.create_line(0, 0, w, 0, fill=IDM_TEAL,   tags="tbbg")
-            tb.create_line(0, 1, w, 1, fill=IDM_TEAL_D, tags="tbbg")
-            # Bottom separator
-            tb.create_line(0, 25, w, 25, fill=IDM_SH2, tags="tbbg")
-            # Title
-            tb.create_text(w // 2, 13,
-                           text="YouTube  →  GIF  Converter",
-                           font=IDM_FONT_T, fill=IDM_TB_FG, tags="tbbg")
-            tb.tag_lower("tbbg")
-            # Re-position right-side buttons after resize
-            for i, (rid, tid) in enumerate(self._tb_btns):
-                rx1 = self._tb_btn_x(i, w)
-                tb.coords(rid, rx1, 4, rx1 + 18, 22)
-                tb.coords(tid, rx1 + 9, 13)
-
-        tb.bind("<Configure>", draw)
-        self.after(10, draw)
-        tb.bind("<ButtonPress-1>", self._drag_start)
-        tb.bind("<B1-Motion>",     self._drag_move)
-
-    def _tb_btn_x(self, idx, total_w=None):
-        w = total_w or (self._tb.winfo_width() or 560)
-        return w - 24 - idx * 22
-
-    # ── Thick window border ────────────────────────────────────────────────────
-    def _window_border(self, parent):
-        """Draw outer Motif-style thick raised border using nested frames."""
-        # Outer shadow (2px)
-        f1 = tk.Frame(parent, bg=IDM_HI1, bd=0)
-        f1.pack(fill="both", expand=True, padx=0, pady=0)
-        f2 = tk.Frame(f1, bg=IDM_HI2, bd=0)
-        f2.pack(fill="both", expand=True, padx=1, pady=1)
-        f3 = tk.Frame(f2, bg=IDM_SH1, bd=0)
-        f3.pack(fill="both", expand=True, padx=1, pady=1)
-        f4 = tk.Frame(f3, bg=IDM_SH2, bd=0)
-        f4.pack(fill="both", expand=True, padx=1, pady=1)
-        inner = tk.Frame(f4, bg=IDM_WIN_BG, bd=0)
-        inner.pack(fill="both", expand=True, padx=1, pady=1)
-        return inner
-
-    # ── Grooved section frame ──────────────────────────────────────────────────
-    def _grooved(self, parent, title=""):
-        """Motif-style grooved/etched label frame."""
-        outer = tk.Frame(parent, bg=IDM_WIN_BG)
-        outer.pack(fill="x", padx=10, pady=(0, 8))
-
-        if title:
-            hdr = tk.Frame(outer, bg=IDM_WIN_BG)
-            hdr.pack(fill="x", pady=(0, 2))
-            # Teal left accent bar
-            tk.Frame(hdr, bg=IDM_TEAL, width=4).pack(side="left", fill="y")
-            tk.Label(hdr, text=title,
-                     font=IDM_FONT_CAP, bg=IDM_WIN_BG, fg=IDM_TEAL,
-                     padx=4, pady=1).pack(side="left")
-            tk.Frame(hdr, bg=IDM_SEP, height=1).pack(side="left",
-                                                       fill="x", expand=True)
-
-        # Grooved box: outer dark, inner light
-        groove = tk.Frame(outer,
-                          highlightbackground=IDM_SH1,
-                          highlightthickness=1)
-        groove.pack(fill="x")
-        highlight = tk.Frame(groove,
-                              highlightbackground=IDM_HI1,
-                              highlightthickness=1,
-                              bg=IDM_BODY)
-        highlight.pack(fill="x", padx=1, pady=1)
-        inner = tk.Frame(highlight, bg=IDM_BODY, padx=10, pady=8)
-        inner.pack(fill="x")
-        return inner
-
-    # ── Entry helper ───────────────────────────────────────────────────────────
-    def _entry(self, parent, var, width, state="normal", small=False):
-        return tk.Entry(parent,
-                        textvariable=var,
-                        font=IDM_FONT_SM if small else IDM_FONT,
-                        bg=IDM_ENTRY, fg=IDM_TEXT,
-                        insertbackground=IDM_TEXT,
-                        disabledbackground=IDM_WIN_BG,
-                        disabledforeground=IDM_TEXT_D,
-                        selectbackground=IDM_TEAL,
-                        selectforeground="#000000",
-                        relief="sunken", bd=2,
-                        width=width, state=state)
-
-    # ── Shelf (SGI bottom toolbar strip) ───────────────────────────────────────
-    def _build_shelf(self, parent):
-        shelf = tk.Frame(parent, bg=IDM_SHELF, height=22)
-        shelf.pack(fill="x", side="bottom")
-        shelf.pack_propagate(False)
-        # Teal top accent line
-        tk.Frame(shelf, bg=IDM_TEAL, height=2).pack(fill="x")
-        tk.Label(shelf, text="SGI  IRIX  Indigo Magic",
-                 font=IDM_FONT_SM, bg=IDM_SHELF, fg=IDM_TEAL,
-                 anchor="w", padx=8).pack(side="left", fill="y")
-
-    # ── UI ─────────────────────────────────────────────────────────────────────
     def _build_ui(self):
-        self._build_title_bar(self)
+        # ── Title bar ──────────────────────────────────────────────────
+        title_bar = tk.Frame(self, bg=W2K_TITLE_BG, height=36)
+        title_bar.pack(fill="x")
+        title_bar.pack_propagate(False)
 
-        # Thick raised window border wraps all content
-        content = self._window_border(self)
+        tk.Label(title_bar,
+                 text="  YouTube Shorts → GIF Converter",
+                 font=W2K_FONT_B,
+                 bg=W2K_TITLE_BG, fg=W2K_TITLE_FG,
+                 anchor="w").pack(side="left", fill="y")
 
-        self._build_shelf(content)
+        for sym, cmd in [("_", self.iconify), ("X", self.destroy)]:
+            Win2KButton(title_bar, text=sym, command=cmd,
+                        font=W2K_FONT_B, padx=10, pady=2
+                        ).pack(side="right", padx=1, pady=2)
 
-        body = tk.Frame(content, bg=IDM_WIN_BG, padx=0, pady=8)
+        # ── Body ───────────────────────────────────────────────────────
+        body = tk.Frame(self, bg=W2K_BG, padx=14, pady=12)
         body.pack(fill="both")
 
-        # ── URL ────────────────────────────────────────────────────────
-        url_inner = self._grooved(body, "YOUTUBE URL")
+        # URL group
+        url_lf = tk.LabelFrame(body, text="YouTube URL",
+                                font=W2K_FONT, bg=W2K_BG, fg=W2K_TEXT,
+                                relief="groove", bd=2)
+        url_lf.pack(fill="x", pady=(0, 10))
 
-        url_row = tk.Frame(url_inner, bg=IDM_BODY)
-        url_row.pack(fill="x")
+        url_inner = tk.Frame(url_lf, bg=W2K_BG)
+        url_inner.pack(fill="x", padx=8, pady=6)
 
         self.url_var = tk.StringVar()
-        self.url_entry = self._entry(url_row, self.url_var, width=40)
+        self.url_entry = tk.Entry(url_inner,
+                                   textvariable=self.url_var,
+                                   font=W2K_FONT,
+                                   bg=W2K_ENTRY, fg=W2K_TEXT,
+                                   insertbackground=W2K_TEXT,
+                                   relief="sunken", bd=2, width=38)
         self.url_entry.pack(side="left", fill="x", expand=True)
+        w2k_btn(url_inner, "붙여넣기(&P)", self._paste_url,
+                width=10, padx=14).pack(side="left", padx=(6, 0))
 
-        MotifButton(url_row, "붙여넣기", self._paste_url,
-                    min_width=80, padx=12, pady=4,
-                    font=IDM_FONT_SM, bg=IDM_BODY
-                    ).pack(side="left", padx=(6, 0))
+        # Options group
+        opt_lf = tk.LabelFrame(body, text="변환 옵션",
+                                font=W2K_FONT, bg=W2K_BG, fg=W2K_TEXT,
+                                relief="groove", bd=2)
+        opt_lf.pack(fill="x", pady=(0, 10))
 
-        # ── Options ────────────────────────────────────────────────────
-        opt_inner = self._grooved(body, "CONVERSION OPTIONS")
+        opt_inner = tk.Frame(opt_lf, bg=W2K_BG)
+        opt_inner.pack(padx=10, pady=8, fill="x")
 
-        row1 = tk.Frame(opt_inner, bg=IDM_BODY)
-        row1.pack(fill="x")
-
-        tk.Label(row1, text="FPS:", font=IDM_FONT,
-                 bg=IDM_BODY, fg=IDM_TEXT,
-                 width=10, anchor="w").pack(side="left")
+        # FPS
+        tk.Label(opt_inner, text="FPS:", font=W2K_FONT,
+                 bg=W2K_BG, fg=W2K_TEXT).grid(row=0, column=0, sticky="w")
         self.fps_var = tk.IntVar(value=15)
-        tk.Spinbox(row1, from_=5, to=30, increment=5,
+        tk.Spinbox(opt_inner, from_=5, to=30, increment=5,
                    textvariable=self.fps_var,
-                   width=4, font=IDM_FONT,
-                   bg=IDM_ENTRY, fg=IDM_TEXT,
-                   buttonbackground=IDM_BTN,
-                   selectbackground=IDM_TEAL,
-                   relief="sunken", bd=2
-                   ).pack(side="left", padx=(0, 20))
+                   width=4, font=W2K_FONT,
+                   bg=W2K_ENTRY, fg=W2K_TEXT,
+                   relief="sunken", bd=2,
+                   buttonbackground=W2K_FACE
+                   ).grid(row=0, column=1, padx=(6, 20), sticky="w")
 
-        tk.Label(row1, text="가로 크기:", font=IDM_FONT,
-                 bg=IDM_BODY, fg=IDM_TEXT).pack(side="left")
+        # Scale
+        tk.Label(opt_inner, text="가로 크기(px):", font=W2K_FONT,
+                 bg=W2K_BG, fg=W2K_TEXT).grid(row=0, column=2, sticky="w")
         self.scale_var = tk.IntVar(value=480)
-        ttk.Combobox(row1, textvariable=self.scale_var,
+        ttk.Combobox(opt_inner, textvariable=self.scale_var,
                      values=[240, 320, 480, 640, 720],
-                     width=7, state="readonly",
-                     font=IDM_FONT).pack(side="left", padx=(6, 0))
+                     width=6, state="readonly",
+                     font=W2K_FONT
+                     ).grid(row=0, column=3, padx=(6, 20), sticky="w")
 
-        # Grooved separator
-        tk.Frame(opt_inner, bg=IDM_SH1,  height=1).pack(fill="x", pady=(8, 0))
-        tk.Frame(opt_inner, bg=IDM_HI1,  height=1).pack(fill="x", pady=(0, 8))
-
-        row2 = tk.Frame(opt_inner, bg=IDM_BODY)
-        row2.pack(fill="x")
-
-        tk.Label(row2, text="저장 위치:", font=IDM_FONT,
-                 bg=IDM_BODY, fg=IDM_TEXT,
-                 width=10, anchor="w").pack(side="left")
+        # Output dir
+        tk.Label(opt_inner, text="저장 위치:", font=W2K_FONT,
+                 bg=W2K_BG, fg=W2K_TEXT).grid(row=0, column=4, sticky="w")
         self.outdir_var = tk.StringVar(value=OUTPUT_DIR)
-        self._entry(row2, self.outdir_var, width=28,
-                    state="readonly", small=True
-                    ).pack(side="left", fill="x", expand=True)
-        MotifButton(row2, "찾아보기", self._choose_dir,
-                    min_width=80, padx=12, pady=4,
-                    font=IDM_FONT_SM, bg=IDM_BODY
-                    ).pack(side="right", padx=(6, 0))
+        tk.Entry(opt_inner, textvariable=self.outdir_var,
+                 font=W2K_FONT_SM, bg=W2K_ENTRY, fg=W2K_TEXT,
+                 relief="sunken", bd=2, width=18,
+                 state="readonly"
+                 ).grid(row=0, column=5, padx=(6, 6), sticky="w")
+        w2k_btn(opt_inner, "찾아보기...", self._choose_dir,
+                width=8, padx=12).grid(row=0, column=6)
 
-        # ── Button row ─────────────────────────────────────────────────
-        # Etched separator
-        tk.Frame(body, bg=IDM_SH1,  height=1).pack(fill="x", padx=10)
-        tk.Frame(body, bg=IDM_HI1,  height=1).pack(fill="x", padx=10, pady=(0, 8))
+        # ── Separator ──────────────────────────────────────────────────
+        sep_outer = tk.Frame(body, bg=W2K_DARK, height=2)
+        sep_outer.pack(fill="x", pady=6)
+        tk.Frame(sep_outer, bg=W2K_LIGHT, height=1).pack(fill="x", pady=(1, 0))
 
-        btn_row = tk.Frame(body, bg=IDM_WIN_BG)
-        btn_row.pack(pady=(0, 8))
+        # ── Convert button row ─────────────────────────────────────────
+        btn_row = tk.Frame(body, bg=W2K_BG)
+        btn_row.pack(pady=6)
 
-        self.convert_btn = MotifButton(btn_row, "GIF 변환 시작",
-                                        self._start_conversion,
-                                        min_width=260, padx=20, pady=8,
-                                        font=IDM_FONT_B, color=IDM_TEAL,
-                                        depth=3)
+        self.convert_btn = w2k_btn(btn_row, "GIF 변환 시작(&C)",
+                                    self._start_conversion,
+                                    width=18, font=W2K_FONT_B,
+                                    default="active", pady=8)
         self.convert_btn.pack(side="left", padx=4)
 
-        MotifButton(btn_row, "닫기", self.destroy,
-                    min_width=80, padx=16, pady=8,
-                    font=IDM_FONT).pack(side="left", padx=4)
+        w2k_btn(btn_row, "닫기(&X)", self.destroy,
+                width=10, pady=8).pack(side="left", padx=4)
 
-        # ── Status ─────────────────────────────────────────────────────
-        status_inner = self._grooved(body, "STATUS")
+        # ── Status group ───────────────────────────────────────────────
+        status_lf = tk.LabelFrame(body, text="상태",
+                                   font=W2K_FONT, bg=W2K_BG, fg=W2K_TEXT,
+                                   relief="groove", bd=2)
+        status_lf.pack(fill="x", pady=(8, 0))
+
+        status_inner = tk.Frame(status_lf, bg=W2K_BG)
+        status_inner.pack(fill="x", padx=8, pady=6)
 
         self.progress_lbl = tk.Label(status_inner, text="대기 중...",
-                                      font=IDM_FONT, bg=IDM_BODY,
-                                      fg=IDM_TEXT_D, anchor="w")
+                                      font=W2K_FONT, bg=W2K_BG, fg=W2K_TEXT,
+                                      anchor="w")
         self.progress_lbl.pack(fill="x")
 
-        self.progress = ttk.Progressbar(status_inner, mode="indeterminate",
-                                         length=460,
-                                         style="IDM.Horizontal.TProgressbar")
-        self.progress.pack(fill="x", pady=(6, 0))
+        self.progress = ttk.Progressbar(status_inner,
+                                         mode="indeterminate", length=600)
+        self.progress.pack(fill="x", pady=(4, 0))
 
-        # ── Result ─────────────────────────────────────────────────────
-        self.result_frame = tk.Frame(body, bg=IDM_WIN_BG)
-        self.result_frame.pack(fill="x", padx=10, pady=(0, 4))
+        # ── Result row ─────────────────────────────────────────────────
+        self.result_frame = tk.Frame(body, bg=W2K_BG)
+        self.result_frame.pack(fill="x", pady=(6, 4))
 
-        self.result_lbl = tk.Label(self.result_frame, text="",
-                                    font=IDM_FONT_SM, bg=IDM_WIN_BG,
-                                    fg=IDM_TEXT, wraplength=420,
-                                    justify="left", anchor="w")
-        self.result_lbl.pack(side="left", fill="x", expand=True)
+        result_box = tk.Frame(self.result_frame,
+                               bg=W2K_ENTRY, relief="sunken", bd=2)
+        result_box.pack(side="left", fill="x", expand=True)
+        self.result_lbl = tk.Label(result_box, text="",
+                                    font=W2K_FONT_SM,
+                                    bg=W2K_ENTRY, fg=W2K_TEXT,
+                                    wraplength=560, justify="left", anchor="w",
+                                    padx=6, pady=4)
+        self.result_lbl.pack(fill="x")
 
-        self.open_btn = MotifButton(self.result_frame, "Finder 열기",
-                                     self._open_in_finder,
-                                     min_width=100, padx=14, pady=6,
-                                     font=IDM_FONT_SM)
+        self.open_btn = w2k_btn(self.result_frame, "폴더 열기",
+                                 self._open_in_finder, width=10)
         self._last_gif = None
-
-    # ── Drag ───────────────────────────────────────────────────────────────────
-    def _drag_start(self, event):
-        self._drag_x = event.x_root - self.winfo_x()
-        self._drag_y = event.y_root - self.winfo_y()
-
-    def _drag_move(self, event):
-        self.geometry(f"+{event.x_root - self._drag_x}+{event.y_root - self._drag_y}")
 
     # ── Events ─────────────────────────────────────────────────────────────────
     def _check_clipboard_on_focus(self):
@@ -578,13 +439,13 @@ class App(tk.Tk):
         ).start()
 
     def _on_progress(self, msg):
-        self.after(0, lambda: self.progress_lbl.config(text=msg, fg=IDM_TEXT))
+        self.after(0, lambda: self.progress_lbl.config(text=msg))
 
     def _on_done(self, gif_path):
         self._last_gif = gif_path
         size_mb = os.path.getsize(gif_path) / 1024 / 1024
         self.after(0, lambda: self._finish(
-            f"저장 완료: {gif_path}  ({size_mb:.1f} MB)", success=True))
+            f"저장 완료: {gif_path}\n({size_mb:.1f} MB)", success=True))
 
     def _on_error(self, msg):
         self.after(0, lambda: self._finish(msg, success=False))
@@ -592,14 +453,11 @@ class App(tk.Tk):
     def _finish(self, msg, success):
         self.progress.stop()
         self.convert_btn.config(state="normal")
-        self.progress_lbl.config(
-            text="완료!" if success else "오류 발생",
-            fg=IDM_TEAL if success else "#e04040")
-        self.result_lbl.config(
-            text=msg,
-            fg=IDM_TEXT if success else "#e04040")
+        color = "#000080" if success else "#800000"
+        self.progress_lbl.config(text="완료!" if success else "오류 발생")
+        self.result_lbl.config(text=msg, fg=color)
         if success and self._last_gif:
-            self.open_btn.pack(side="right", padx=(8, 0))
+            self.open_btn.pack(side="right", padx=(6, 0))
 
     def _open_in_finder(self):
         if self._last_gif and os.path.exists(self._last_gif):
